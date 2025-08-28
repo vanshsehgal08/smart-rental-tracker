@@ -26,8 +26,16 @@ export default function DemandForecast({ daysAhead }: DemandForecastProps) {
           predicted_demand: Math.floor(Math.random() * 8) + 2,
           confidence: (Math.random() * 0.3 + 0.7).toFixed(2),
           day_of_week: new Date(Date.now() + i * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { weekday: 'short' })
-        }))
+        })),
+        // Add summary data for single equipment forecasts
+        total_predicted_demand: selectedEquipment === 'all' ? undefined : Array.from({ length: daysAhead }, (_, i) => Math.floor(Math.random() * 8) + 2).reduce((sum, val) => sum + val, 0),
+        average_daily_demand: selectedEquipment === 'all' ? undefined : Array.from({ length: daysAhead }, (_, i) => Math.floor(Math.random() * 8) + 2).reduce((sum, val) => sum + val, 0) / daysAhead,
+        trend: selectedEquipment === 'all' ? undefined : ['increasing', 'stable', 'decreasing'][Math.floor(Math.random() * 3)]
       }
+      
+      console.log('Generated mock forecast:', mockForecast)
+      console.log('Selected equipment:', selectedEquipment)
+      console.log('Days ahead:', daysAhead)
       
       setForecast(mockForecast)
       setLoading(false)
@@ -100,19 +108,27 @@ export default function DemandForecast({ daysAhead }: DemandForecastProps) {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="text-center">
             <p className="text-2xl font-bold text-blue-600">
-              {selectedEquipment === 'all' 
-                ? forecast.forecasts?.reduce((sum: number, item: any) => sum + item.predicted_demand, 0) || 0
-                : forecast.total_predicted_demand || 0
-              }
+              {(() => {
+                const total = selectedEquipment === 'all' 
+                  ? forecast.forecasts?.reduce((sum: number, item: any) => sum + (item.predicted_demand || 0), 0) || 0
+                  : forecast.total_predicted_demand || 0
+                console.log('Total Predicted Demand calculation:', { selectedEquipment, total, forecasts: forecast.forecasts })
+                return total
+              })()}
             </p>
             <p className="text-sm text-gray-600">Total Predicted Demand</p>
           </div>
           <div className="text-center">
             <p className="text-2xl font-bold text-green-600">
-              {selectedEquipment === 'all' 
-                ? (forecast.forecasts?.reduce((sum: number, item: any) => sum + item.predicted_demand, 0) / daysAhead)?.toFixed(1) || 0
-                : forecast.average_daily_demand || 0
-              }
+              {(() => {
+                const avg = selectedEquipment === 'all' 
+                  ? forecast.forecasts?.length > 0 
+                    ? (forecast.forecasts.reduce((sum: number, item: any) => sum + (item.predicted_demand || 0), 0) / forecast.forecasts.length).toFixed(1)
+                    : '0.0'
+                  : forecast.average_daily_demand || 0
+                console.log('Average Daily Demand calculation:', { selectedEquipment, avg, forecasts: forecast.forecasts })
+                return avg
+              })()}
             </p>
             <p className="text-sm text-gray-600">Average Daily Demand</p>
           </div>
