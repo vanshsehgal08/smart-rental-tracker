@@ -119,7 +119,7 @@ def get_dashboard_data():
     
     # Equipment type statistics
     equipment_stats = {
-        "overall": {
+        "overview": {
             "total_equipment": total_equipment,
             "total_rentals": active_rentals,
             "average_utilization": utilization_rate,

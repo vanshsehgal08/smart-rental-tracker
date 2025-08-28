@@ -13,8 +13,28 @@ import warnings
 warnings.filterwarnings('ignore')
 
 class SmartMLSystem:
-    def __init__(self, data_path: str = "../database/data.csv"):
+    def __init__(self, data_path: str = None):
         """Initialize the Smart ML System for rental tracking"""
+        if data_path is None:
+            # Try to find the data file relative to this script
+            current_dir = os.path.dirname(__file__)
+            # Try different possible paths
+            possible_paths = [
+                os.path.join(current_dir, '..', 'database', 'data.csv'),
+                os.path.join(current_dir, '..', '..', 'database', 'data.csv'),
+                os.path.join(os.getcwd(), 'database', 'data.csv'),
+                os.path.join(os.getcwd(), '..', 'database', 'data.csv')
+            ]
+            
+            for path in possible_paths:
+                if os.path.exists(path):
+                    data_path = path
+                    break
+            
+            if data_path is None:
+                print("⚠️ Could not find data.csv file automatically")
+                data_path = "../database/data.csv"  # fallback
+        
         self.data_path = data_path
         self.data = None
         self.scaler = StandardScaler()
@@ -28,7 +48,14 @@ class SmartMLSystem:
         self._load_data()
         if self.data is not None:
             self._preprocess_data()
-            self._train_models()
+            
+            # Try to load saved models first, fallback to training if they don't exist
+            models_dir = os.path.join(os.path.dirname(__file__), 'models')
+            if os.path.exists(models_dir) and self._try_load_models(models_dir):
+                print("✅ Loaded saved ML models successfully!")
+            else:
+                print("📊 No saved models found, training new models...")
+                self._train_models()
     
     def _load_data(self):
         """Load data from CSV file"""
@@ -68,9 +95,9 @@ class SmartMLSystem:
         # Encode categorical variables
         self.data['equipment_type_encoded'] = self.equipment_encoder.fit_transform(self.data['Type'])
         
-        # Handle NULL values in Site ID
-        self.data['Site ID'] = self.data['Site ID'].fillna('UNASSIGNED')
-        self.data['site_encoded'] = self.site_encoder.fit_transform(self.data['Site ID'])
+        # Handle NULL values in User ID (which represents site assignment)
+        self.data['User ID'] = self.data['User ID'].fillna('UNASSIGNED')
+        self.data['site_encoded'] = self.site_encoder.fit_transform(self.data['User ID'])
         
         # Create features for anomaly detection
         self.data['anomaly_features'] = list(zip(
@@ -164,7 +191,7 @@ class SmartMLSystem:
                 results.append({
                     "equipment_id": row['Equipment ID'],
                     "type": row['Type'],
-                    "site_id": row['Site ID'],
+                    "site_id": row['User ID'],
                     "check_out_date": row['Check-Out Date'].strftime('%Y-%m-%d'),
                     "check_in_date": row['Check-in Date'].strftime('%Y-%m-%d'),
                     "engine_hours_per_day": row['Engine Hours/Day'],
@@ -218,7 +245,7 @@ class SmartMLSystem:
             if equipment_type:
                 filtered_data = filtered_data[filtered_data['Type'] == equipment_type]
             if site_id and site_id != 'UNASSIGNED':
-                filtered_data = filtered_data[filtered_data['Site ID'] == site_id]
+                filtered_data = filtered_data[filtered_data['User ID'] == site_id]
             
             if len(filtered_data) == 0:
                 return {"error": "No data found for the specified parameters"}
@@ -326,7 +353,7 @@ class SmartMLSystem:
                 }
             
             # Site utilization statistics
-            site_stats = self.data.groupby('Site ID').agg({
+            site_stats = self.data.groupby('User ID').agg({
                 'Equipment ID': 'count',
                 'utilization_ratio': 'mean',
                 'efficiency_score': 'mean'
@@ -391,7 +418,7 @@ class SmartMLSystem:
                 })
             
             # Check for unassigned equipment
-            unassigned = self.data[self.data['Site ID'] == 'UNASSIGNED']
+            unassigned = self.data[self.data['User ID'] == 'UNASSIGNED']
             if len(unassigned) > 0:
                 recommendations.append({
                     "type": "unassigned_equipment",
@@ -471,6 +498,59 @@ class SmartMLSystem:
         except Exception as e:
             print(f"Error loading models: {e}")
             self.models_trained = False
+
+    def get_model_status(self) -> Dict:
+        """Get the status of ML models"""
+        models_dir = os.path.join(os.path.dirname(__file__), 'models')
+        saved_models_exist = os.path.exists(models_dir)
+        
+        status = {
+            "models_trained": self.models_trained,
+            "data_loaded": self.data is not None,
+            "data_records": len(self.data) if self.data is not None else 0,
+            "saved_models_exist": saved_models_exist,
+            "models_directory": models_dir
+        }
+        
+        if saved_models_exist:
+            try:
+                model_files = os.listdir(models_dir)
+                status["saved_model_files"] = model_files
+                status["total_saved_models"] = len(model_files)
+            except Exception as e:
+                status["saved_model_files"] = []
+                status["total_saved_models"] = 0
+                status["error"] = str(e)
+        
+        return status
+
+    def _try_load_models(self, models_dir: str) -> bool:
+        """Attempt to load models from a directory."""
+        try:
+            self.anomaly_detector = joblib.load(os.path.join(models_dir, 'anomaly_detector.pkl'))
+            self.demand_forecaster = joblib.load(os.path.join(models_dir, 'demand_forecaster.pkl'))
+            self.scaler = joblib.load(os.path.join(models_dir, 'scaler.pkl'))
+            self.equipment_encoder = joblib.load(os.path.join(models_dir, 'equipment_encoder.pkl'))
+            self.site_encoder = joblib.load(os.path.join(models_dir, 'site_encoder.pkl'))
+            
+            # Attempt to load scaler and encoders if they were saved
+            try:
+                self.scaler = joblib.load(os.path.join(models_dir, 'scaler.pkl'))
+                self.equipment_encoder = joblib.load(os.path.join(models_dir, 'equipment_encoder.pkl'))
+                self.site_encoder = joblib.load(os.path.join(models_dir, 'site_encoder.pkl'))
+            except FileNotFoundError:
+                print("⚠️ Scaler, Equipment Encoder, or Site Encoder not found in saved models. Retraining models.")
+                return False
+
+            self.models_trained = True
+            print("✅ Loaded saved ML models successfully!")
+            return True
+        except FileNotFoundError:
+            print("📊 No saved models found in the specified directory.")
+            return False
+        except Exception as e:
+            print(f"Error loading models from {models_dir}: {e}")
+            return False
 
 # Create a simple interface for the existing ML integration
 class SimpleML:

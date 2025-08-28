@@ -1,213 +1,163 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 
-interface EquipmentStatsProps {
-  showDetailed?: boolean
+interface EquipmentStats {
+  overview: {
+    total_equipment: number
+    total_rentals: number
+    average_utilization: number
+    total_engine_hours: number
+  }
+  by_equipment_type: {
+    [key: string]: {
+      count: number
+      utilization: number
+      avg_utilization: number
+      avg_efficiency: number
+    }
+  }
 }
 
-const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6']
-
-export default function EquipmentStats({ showDetailed = false }: EquipmentStatsProps) {
-  const [stats, setStats] = useState<any>(null)
+export default function EquipmentStats() {
+  const [stats, setStats] = useState<EquipmentStats | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        // Use the dashboard endpoint instead of ML API
-        const response = await fetch('/api/dashboard')
-        const data = await response.json()
-        setStats(data.equipment_stats)
-      } catch (error) {
-        console.error('Error fetching equipment stats:', error)
-        // Fallback to mock data
-        setStats({
-          overall: {
-            total_equipment: 24,
-            average_utilization: 78,
-            average_rental_duration: 12.5,
-            total_engine_hours: 4560
-          },
-          by_equipment_type: {
-            excavator: { count: 8, avg_utilization: 82, avg_efficiency: 0.85 },
-            bulldozer: { count: 6, avg_utilization: 75, avg_efficiency: 0.78 },
-            crane: { count: 4, avg_utilization: 88, avg_efficiency: 0.92 },
-            loader: { count: 6, avg_utilization: 71, avg_efficiency: 0.76 }
-          }
-        })
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchStats()
+    loadEquipmentStats()
   }, [])
+
+  const loadEquipmentStats = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      
+      const response = await fetch('http://localhost:8000/dashboard')
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+      
+      const data = await response.json()
+      setStats(data.equipment_stats)
+    } catch (err) {
+      console.error('Error loading equipment stats:', err)
+      setError(err instanceof Error ? err.message : 'Failed to load equipment statistics')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+      <div className="card">
+        <h3 className="text-lg font-semibold mb-4">Equipment Performance Statistics</h3>
+        <div className="animate-pulse">
+          <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+          <div className="h-4 bg-gray-200 rounded w-1/2 mb-2"></div>
+          <div className="h-4 bg-gray-200 rounded w-2/3"></div>
+        </div>
       </div>
     )
   }
 
-  if (!stats) {
+  if (error) {
     return (
-      <div className="text-center text-gray-500 py-8">
-        No equipment statistics available
+      <div className="card">
+        <h3 className="text-lg font-semibold mb-4">Equipment Performance Statistics</h3>
+        <div className="text-red-600 bg-red-50 p-4 rounded-lg">
+          <p className="font-medium">Error loading equipment statistics</p>
+          <p className="text-sm mt-1">{error}</p>
+          <button 
+            onClick={loadEquipmentStats}
+            className="mt-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 text-sm"
+          >
+            Try Again
+          </button>
+        </div>
       </div>
     )
   }
 
-  // Prepare data for charts
-  const equipmentTypeData = Object.entries(stats.by_equipment_type || {}).map(([type, data]: [string, any]) => ({
-    type,
-    count: data.count,
-    avgUtilization: data.avg_utilization,
-    avgEfficiency: data.avg_efficiency,
-  }))
-
-  const utilizationData = equipmentTypeData.map(item => ({
-    name: item.type,
-    utilization: item.avgUtilization,
-    efficiency: item.avgEfficiency,
-  }))
-
-  const pieData = equipmentTypeData.map(item => ({
-    name: item.type,
-    value: item.count,
-  }))
+  if (!stats || !stats.overview) {
+    return (
+      <div className="card">
+        <h3 className="text-lg font-semibold mb-4">Equipment Performance Statistics</h3>
+        <div className="text-gray-600 bg-gray-50 p-4 rounded-lg">
+          <p className="font-medium">No Equipment Data Available</p>
+          <p className="text-sm mt-1">
+            The equipment statistics are currently unavailable. This could be due to:
+          </p>
+          <ul className="text-sm mt-2 list-disc list-inside space-y-1">
+            <li>Backend server not running</li>
+            <li>CSV data file not accessible</li>
+            <li>Database connection issues</li>
+          </ul>
+          <button 
+            onClick={loadEquipmentStats}
+            className="mt-3 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
+          >
+            Refresh Data
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="space-y-6">
-      {/* Summary Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="text-center">
-          <p className="text-2xl font-bold text-primary-600">
-            {stats.overall?.total_equipment || 0}
-          </p>
-          <p className="text-sm text-gray-600">Total Equipment</p>
+    <div className="card">
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-lg font-semibold">Equipment Performance Statistics</h3>
+        <button 
+          onClick={loadEquipmentStats}
+          className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
+        >
+          Refresh
+        </button>
+      </div>
+
+      {/* Overall Statistics */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div className="bg-blue-50 p-3 rounded-lg">
+          <p className="text-sm text-blue-600 font-medium">Total Equipment</p>
+          <p className="text-2xl font-bold text-blue-800">{stats.overview.total_equipment}</p>
         </div>
-        <div className="text-center">
-          <p className="text-2xl font-bold text-green-600">
-            {stats.overall?.average_utilization?.toFixed(1) || 0}%
-          </p>
-          <p className="text-sm text-gray-600">Avg Utilization</p>
+        <div className="bg-green-50 p-3 rounded-lg">
+          <p className="text-sm text-green-600 font-medium">Active Rentals</p>
+          <p className="text-2xl font-bold text-green-800">{stats.overview.total_rentals}</p>
         </div>
-        <div className="text-center">
-          <p className="text-2xl font-bold text-blue-600">
-            {stats.overall?.average_rental_duration?.toFixed(1) || 0}
-          </p>
-          <p className="text-sm text-gray-600">Avg Rental Days</p>
+        <div className="bg-purple-50 p-3 rounded-lg">
+          <p className="text-sm text-purple-600 font-medium">Avg Utilization</p>
+          <p className="text-2xl font-bold text-purple-800">{stats.overview.average_utilization}%</p>
         </div>
-        <div className="text-center">
-          <p className="text-2xl font-bold text-yellow-600">
-            {stats.overall?.total_engine_hours?.toFixed(0) || 0}
-          </p>
-          <p className="text-sm text-gray-600">Total Engine Hours</p>
+        <div className="bg-orange-50 p-3 rounded-lg">
+          <p className="text-sm text-orange-600 font-medium">Total Engine Hours</p>
+          <p className="text-2xl font-bold text-orange-800">{stats.overview.total_engine_hours}</p>
         </div>
       </div>
 
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Equipment Distribution */}
-        <div>
-          <h4 className="text-lg font-medium text-gray-900 mb-4">Equipment Distribution</h4>
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={pieData}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                outerRadius={80}
-                fill="#8884d8"
-                dataKey="value"
-              >
-                {pieData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* Utilization by Equipment Type */}
-        <div>
-          <h4 className="text-lg font-medium text-gray-900 mb-4">Utilization by Equipment Type</h4>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={utilizationData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip />
-              <Bar dataKey="utilization" fill="#3B82F6" name="Utilization %" />
-              <Bar dataKey="efficiency" fill="#10B981" name="Efficiency %" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* Detailed Equipment Table */}
-      {showDetailed && (
-        <div>
-          <h4 className="text-lg font-medium text-gray-900 mb-4">Detailed Equipment Statistics</h4>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Equipment Type
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Count
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Avg Engine Hours
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Avg Idle Hours
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Utilization %
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Efficiency %
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {equipmentTypeData.map((item) => (
-                  <tr key={item.type}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {item.type}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {item.count}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {stats.by_equipment_type[item.type]?.avg_engine_hours?.toFixed(1) || 0}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {stats.by_equipment_type[item.type]?.avg_idle_hours?.toFixed(1) || 0}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {item.avgUtilization?.toFixed(1) || 0}%
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {item.avgEfficiency?.toFixed(1) || 0}%
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {/* Equipment Type Breakdown */}
+      <div className="space-y-4">
+        <h4 className="font-medium text-gray-700">Performance by Equipment Type</h4>
+        {stats.by_equipment_type && Object.entries(stats.by_equipment_type).map(([type, data]) => (
+          <div key={type} className="bg-gray-50 p-4 rounded-lg">
+            <div className="flex justify-between items-center mb-2">
+              <h5 className="font-medium text-gray-800 capitalize">{type}</h5>
+              <span className="text-sm text-gray-500">{data.count} units</span>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-sm text-gray-600">Utilization Rate</p>
+                <p className="text-lg font-semibold text-blue-600">{data.utilization}%</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">Efficiency Score</p>
+                <p className="text-lg font-semibold text-green-600">{(data.avg_efficiency * 100).toFixed(1)}%</p>
+              </div>
+            </div>
           </div>
-        </div>
-      )}
+        ))}
+      </div>
     </div>
   )
 }

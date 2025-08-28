@@ -390,11 +390,28 @@ def retrain_ml_models():
 @router.get("/health")
 def ml_health_check():
     """Health check for the ML system"""
-    return {
-        "status": "healthy" if ML_MODELS_LOADED else "unhealthy",
-        "ml_system_available": ML_MODELS_LOADED,
-        "models_trained": ml_system.models_trained if ML_MODELS_LOADED else False,
-        "data_loaded": ml_system.data is not None if ML_MODELS_LOADED else False,
-        "data_records": len(ml_system.data) if ML_MODELS_LOADED and ml_system.data is not None else 0,
-        "checked_at": datetime.now().isoformat()
-    }
+    if ML_MODELS_LOADED:
+        model_status = ml_system.get_model_status()
+        return {
+            "status": "healthy" if model_status["models_trained"] else "unhealthy",
+            "ml_system_available": ML_MODELS_LOADED,
+            "models_trained": model_status["models_trained"],
+            "data_loaded": model_status["data_loaded"],
+            "data_records": model_status["data_records"],
+            "saved_models_exist": model_status["saved_models_exist"],
+            "total_saved_models": model_status.get("total_saved_models", 0),
+            "models_directory": model_status["models_directory"],
+            "checked_at": datetime.now().isoformat()
+        }
+    else:
+        return {
+            "status": "unhealthy",
+            "ml_system_available": ML_MODELS_LOADED,
+            "models_trained": False,
+            "data_loaded": False,
+            "data_records": 0,
+            "saved_models_exist": False,
+            "total_saved_models": 0,
+            "models_directory": None,
+            "checked_at": datetime.now().isoformat()
+        }
