@@ -30,7 +30,7 @@ backend/build
 .env.production.local
 .env.example
 frontend/.env*
-backend/.env*
+backend/app/.env*
 
 # Logs
 logs
