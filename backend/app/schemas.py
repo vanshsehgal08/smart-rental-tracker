@@ -74,6 +74,14 @@ class OperatorCreate(OperatorBase):
     pass
 
 
+class OperatorUpdate(BaseModel):
+    name: Optional[str] = None
+    license_number: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    certification_level: Optional[str] = None
+
+
 class Operator(OperatorBase):
     id: int
     created_at: datetime

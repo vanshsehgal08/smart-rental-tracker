@@ -2,6 +2,20 @@ from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from typing import List, Optional
+
+import models
+import schemas
+import crud
+from database import engine, get_db
+import threading
+import schedule
+import time
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 import pandas as pd
 import os
 from app import models
@@ -13,12 +27,91 @@ from app.routers import ml_integration
 # Create database tables
 models.Base.metadata.create_all(bind=engine)
 
+# Global variable to control scheduler
+scheduler_thread = None
+scheduler_running = False
+
+def run_scheduled_notifications():
+    """Run the notification service"""
+    try:
+        from notification_service import NotificationService
+        logger.info("Running scheduled notification check...")
+        
+        notification_service = NotificationService()
+        
+        # Test email configuration
+        if not notification_service.test_email_configuration():
+            logger.error("Email configuration test failed. Skipping notification run.")
+            return
+        
+        # Send return reminders
+        notification_service.send_return_reminders()
+        
+        # Send overdue notifications
+        notification_service.send_overdue_notifications()
+        
+        logger.info("Scheduled notification run completed successfully")
+        
+    except Exception as e:
+        logger.error(f"Error in scheduled notification run: {e}")
+
+def schedule_runner():
+    """Background thread function to run the scheduler"""
+    global scheduler_running
+    scheduler_running = True
+    
+    logger.info("Starting notification scheduler...")
+    logger.info("Schedule: Return reminders at 9:00 AM, Overdue notifications at 2:00 PM, Full check at 6:00 PM")
+    
+    # Schedule notifications
+    schedule.every().day.at("09:00").do(run_scheduled_notifications).tag('return_reminders')
+    schedule.every().day.at("14:00").do(run_scheduled_notifications).tag('overdue_notifications')
+    schedule.every().day.at("18:00").do(run_scheduled_notifications).tag('full_check')
+    
+    # Run an initial check when starting
+    logger.info("Running initial notification check...")
+    run_scheduled_notifications()
+    
+    # Keep the scheduler running
+    while scheduler_running:
+        schedule.run_pending()
+        time.sleep(60)  # Check every minute
+    
+    logger.info("Notification scheduler stopped")
+
 # Initialize FastAPI app
 app = FastAPI(
     title="Smart Rental Tracking System",
+
+    description="API for tracking construction and mining equipment rentals with automated notifications",
+
     description="API for tracking construction and mining equipment rentals with ML-powered demand forecasting and anomaly detection",
+
     version="1.0.0"
 )
+
+@app.on_event("startup")
+async def startup_event():
+    """Start the notification scheduler when the server starts"""
+    global scheduler_thread
+    logger.info("🚀 Starting Smart Rental Tracker with automatic email notifications...")
+    
+    # Start the scheduler in a background thread
+    scheduler_thread = threading.Thread(target=schedule_runner, daemon=True)
+    scheduler_thread.start()
+    
+    logger.info("✅ Automatic email notifications are now active!")
+    logger.info("📧 Return reminders: Daily at 9:00 AM")
+    logger.info("⚠️  Overdue notifications: Daily at 2:00 PM")
+    logger.info("🔄 Full check: Daily at 6:00 PM")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Stop the notification scheduler when the server shuts down"""
+    global scheduler_running
+    logger.info("🛑 Stopping Smart Rental Tracker...")
+    scheduler_running = False
+    logger.info("✅ Notification scheduler stopped")
 
 # Add CORS middleware
 app.add_middleware(
@@ -349,6 +442,14 @@ def read_operator(operator_id: int, db: Session = Depends(get_db)):
     return db_operator
 
 
+@app.put("/operators/{operator_id}", response_model=schemas.Operator)
+def update_operator(operator_id: int, operator_update: schemas.OperatorUpdate, db: Session = Depends(get_db)):
+    db_operator = crud.update_operator(db, operator_id=operator_id, operator_update=operator_update)
+    if db_operator is None:
+        raise HTTPException(status_code=404, detail="Operator not found")
+    return db_operator
+
+
 # Rental endpoints
 @app.post("/rentals/", response_model=schemas.Rental)
 def create_rental(rental: schemas.RentalCreate, db: Session = Depends(get_db)):
@@ -474,6 +575,117 @@ def detect_anomalies(db: Session = Depends(get_db)):
         "idle_alerts_created": len(idle_alerts),
         "overdue_alerts_created": len(overdue_alerts)
     }
+
+
+# Notification endpoints
+@app.get("/notifications/upcoming-returns")
+def get_upcoming_returns():
+    """Get equipment rentals due for return within notification window"""
+    from notification_service import NotificationService
+    notification_service = NotificationService()
+    upcoming_rentals = notification_service.get_upcoming_returns()
+    return {
+        "count": len(upcoming_rentals),
+        "rentals": upcoming_rentals
+    }
+
+
+@app.get("/notifications/overdue-rentals")
+def get_overdue_rentals():
+    """Get overdue equipment rentals"""
+    from notification_service import NotificationService
+    notification_service = NotificationService()
+    overdue_rentals = notification_service.get_overdue_rentals()
+    return {
+        "count": len(overdue_rentals),
+        "rentals": overdue_rentals
+    }
+
+
+@app.post("/notifications/send-return-reminders")
+def send_return_reminders():
+    """Send return reminder emails for upcoming due dates"""
+    from notification_service import NotificationService
+    notification_service = NotificationService()
+    
+    # Test email configuration first
+    if not notification_service.test_email_configuration():
+        raise HTTPException(
+            status_code=500, 
+            detail="Email configuration error. Please check SMTP settings in .env file."
+        )
+    
+    try:
+        notification_service.send_return_reminders()
+        return {"message": "Return reminder emails sent successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to send emails: {str(e)}")
+
+
+@app.post("/notifications/send-overdue-notifications")
+def send_overdue_notifications():
+    """Send overdue rental notifications"""
+    from notification_service import NotificationService
+    notification_service = NotificationService()
+    
+    # Test email configuration first
+    if not notification_service.test_email_configuration():
+        raise HTTPException(
+            status_code=500, 
+            detail="Email configuration error. Please check SMTP settings in .env file."
+        )
+    
+    try:
+        notification_service.send_overdue_notifications()
+        return {"message": "Overdue rental notifications sent successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to send emails: {str(e)}")
+
+
+@app.post("/notifications/test-email-config")
+def test_email_configuration():
+    """Test email configuration"""
+    from notification_service import NotificationService
+    notification_service = NotificationService()
+    
+    if notification_service.test_email_configuration():
+        return {"message": "Email configuration is valid"}
+    else:
+        raise HTTPException(
+            status_code=500, 
+            detail="Email configuration test failed. Please check your .env file settings."
+        )
+
+
+@app.post("/notifications/run-all")
+def run_all_notifications():
+    """Run all notification checks and send emails"""
+    from notification_service import NotificationService
+    notification_service = NotificationService()
+    
+    # Test email configuration first
+    if not notification_service.test_email_configuration():
+        raise HTTPException(
+            status_code=500, 
+            detail="Email configuration error. Please check SMTP settings in .env file."
+        )
+    
+    try:
+        # Get counts before sending
+        upcoming = notification_service.get_upcoming_returns()
+        overdue = notification_service.get_overdue_rentals()
+        
+        # Send notifications
+        notification_service.send_return_reminders()
+        notification_service.send_overdue_notifications()
+        
+        return {
+            "message": "All notifications processed successfully",
+            "upcoming_returns_processed": len(upcoming),
+            "overdue_rentals_processed": len(overdue)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to process notifications: {str(e)}")
 
 
 if __name__ == "__main__":
