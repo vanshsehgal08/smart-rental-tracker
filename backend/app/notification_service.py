@@ -13,13 +13,14 @@ from email.mime.base import MIMEBase
 from email import encoders
 import os
 from dotenv import load_dotenv
-from database import SessionLocal
-from models import Rental, Equipment, Operator, Site
+from app.database import SessionLocal
+from app.models import Equipment
 from typing import List, Dict, Any
 import logging
 
 # Load environment variables
-load_dotenv()
+env_path = os.path.join(os.path.dirname(__file__), '.env')
+load_dotenv(env_path)
 
 # Configure logging
 logging.basicConfig(
@@ -41,37 +42,77 @@ class NotificationService:
         self.email_from = os.getenv('EMAIL_FROM', 'Smart Rental Tracker')
         self.notification_days_ahead = int(os.getenv('NOTIFICATION_DAYS_AHEAD', '7'))
         
+        # Debug logging
+        logger.info(f"Email config - Server: {self.smtp_server}, Port: {self.smtp_port}")
+        logger.info(f"Email config - Username: {'***' if self.smtp_username else 'None'}")
+        logger.info(f"Email config - Password: {'***' if self.smtp_password else 'None'}")
+        
     def get_upcoming_returns(self) -> List[Dict[str, Any]]:
-        """Get all rentals with return dates within notification window"""
+        """Get equipment with upcoming return dates within notification window"""
         db = SessionLocal()
         try:
-            # Calculate the target date (X days from now)
-            target_date = datetime.now() + timedelta(days=self.notification_days_ahead)
+            from datetime import datetime
+            from sqlalchemy import and_
             
-            # Query for active rentals with return dates on target date
-            from sqlalchemy import func
-            upcoming_rentals = db.query(Rental).join(Equipment).join(Operator).join(Site).filter(
-                Rental.status == 'active',
-                func.date(Rental.expected_return_date) == target_date.date()
+            # Get equipment that is currently rented (has site_id and check_in_date)
+            equipment_list = db.query(Equipment).filter(
+                and_(
+                    Equipment.site_id.isnot(None),  # Currently rented
+                    Equipment.check_in_date.isnot(None)  # Has expected return date
+                )
             ).all()
             
             rental_data = []
-            for rental in upcoming_rentals:
-                rental_data.append({
-                    'rental_id': rental.id,
-                    'equipment_name': f"{rental.equipment.type} {rental.equipment.model}" if rental.equipment.model else rental.equipment.type,
-                    'equipment_type': rental.equipment.type,
-                    'equipment_serial': rental.equipment.serial_number,
-                    'operator_name': rental.operator.name,
-                    'operator_email': rental.operator.email,
-                    'operator_phone': rental.operator.phone,
-                    'site_name': rental.site.name,
-                    'site_contact_email': getattr(rental.site, 'contact_email', 'N/A'),
-                    'site_contact_phone': rental.site.contact_phone,
-                    'check_out_date': rental.check_out_date,
-                    'expected_return_date': rental.expected_return_date,
-                    'rental_rate': rental.rental_rate_per_day
-                })
+            for equipment in equipment_list:
+                # Parse check_in_date as expected return date
+                try:
+                    if equipment.check_in_date:
+                        # Assuming check_in_date is stored as string in "YYYY-MM-DD" format
+                        from datetime import datetime
+                        if isinstance(equipment.check_in_date, str):
+                            expected_return = datetime.strptime(equipment.check_in_date, '%Y-%m-%d')
+                        else:
+                            expected_return = equipment.check_in_date
+                        
+                        # Check if return is within notification window
+                        days_until_return = (expected_return.date() - datetime.now().date()).days
+                        
+                        if 0 <= days_until_return <= self.notification_days_ahead:
+                            # Parse check_out_date if it's a string
+                            check_out_parsed = None
+                            if equipment.check_out_date:
+                                if isinstance(equipment.check_out_date, str):
+                                    try:
+                                        check_out_parsed = datetime.strptime(equipment.check_out_date, '%Y-%m-%d')
+                                    except ValueError:
+                                        # Try alternative format
+                                        try:
+                                            check_out_parsed = datetime.strptime(equipment.check_out_date, '%m/%d/%Y')
+                                        except ValueError:
+                                            check_out_parsed = datetime.now()  # Fallback
+                                else:
+                                    check_out_parsed = equipment.check_out_date
+                            else:
+                                check_out_parsed = datetime.now()  # Fallback if no date
+                            
+                            rental_data.append({
+                                'equipment_id': equipment.equipment_id,
+                                'equipment_name': f"{equipment.type} {equipment.model}" if equipment.model else equipment.type,
+                                'equipment_type': equipment.type,
+                                'equipment_serial': equipment.serial_number or equipment.equipment_id,
+                                'operator_name': equipment.last_operator_id or "Unknown Operator",
+                                'operator_email': f"{equipment.last_operator_id}@company.com" if equipment.last_operator_id else "operator@company.com",
+                                'operator_phone': "N/A",
+                                'site_name': f"Site {equipment.site_id}" if equipment.site_id else "Unknown Site",
+                                'site_contact_email': f"{equipment.site_id}@company.com" if equipment.site_id else "site@company.com",
+                                'site_contact_phone': "N/A",
+                                'check_out_date': check_out_parsed,
+                                'expected_return_date': expected_return,
+                                'rental_rate': 500.0  # Default daily rate
+                            })
+                except Exception as e:
+                    logger.warning(f"Error processing equipment {equipment.equipment_id}: {e}")
+                    continue
             
             return rental_data
             
@@ -82,40 +123,72 @@ class NotificationService:
             db.close()
     
     def get_overdue_rentals(self) -> List[Dict[str, Any]]:
-        """Get all overdue rentals"""
+        """Get equipment with overdue returns"""
         db = SessionLocal()
         try:
-            today = datetime.now().date()
+            from datetime import datetime
+            from sqlalchemy import and_
             
-            overdue_rentals = db.query(Rental).join(Equipment).join(Operator).join(Site).filter(
-                Rental.status == 'active',
-                Rental.expected_return_date < today
+            # Get equipment that is currently rented and overdue
+            equipment_list = db.query(Equipment).filter(
+                and_(
+                    Equipment.site_id.isnot(None),  # Currently rented
+                    Equipment.check_in_date.isnot(None)  # Has expected return date
+                )
             ).all()
             
             rental_data = []
-            for rental in overdue_rentals:
-                # Handle both date and datetime objects
-                if hasattr(rental.expected_return_date, 'date'):
-                    return_date = rental.expected_return_date.date()
-                else:
-                    return_date = rental.expected_return_date
-                days_overdue = (today - return_date).days
-                rental_data.append({
-                    'rental_id': rental.id,
-                    'equipment_name': f"{rental.equipment.type} {rental.equipment.model}" if rental.equipment.model else rental.equipment.type,
-                    'equipment_type': rental.equipment.type,
-                    'equipment_serial': rental.equipment.serial_number,
-                    'operator_name': rental.operator.name,
-                    'operator_email': rental.operator.email,
-                    'operator_phone': rental.operator.phone,
-                    'site_name': rental.site.name,
-                    'site_contact_email': getattr(rental.site, 'contact_email', 'N/A'),
-                    'site_contact_phone': rental.site.contact_phone,
-                    'check_out_date': rental.check_out_date,
-                    'expected_return_date': rental.expected_return_date,
-                    'days_overdue': days_overdue,
-                    'rental_rate': rental.rental_rate_per_day
-                })
+            today = datetime.now().date()
+            
+            for equipment in equipment_list:
+                try:
+                    if equipment.check_in_date:
+                        # Parse expected return date
+                        if isinstance(equipment.check_in_date, str):
+                            expected_return = datetime.strptime(equipment.check_in_date, '%Y-%m-%d')
+                        else:
+                            expected_return = equipment.check_in_date
+                        
+                        # Check if overdue
+                        if expected_return.date() < today:
+                            days_overdue = (today - expected_return.date()).days
+                            
+                            # Parse check_out_date if it's a string
+                            check_out_parsed = None
+                            if equipment.check_out_date:
+                                if isinstance(equipment.check_out_date, str):
+                                    try:
+                                        check_out_parsed = datetime.strptime(equipment.check_out_date, '%Y-%m-%d')
+                                    except ValueError:
+                                        # Try alternative format
+                                        try:
+                                            check_out_parsed = datetime.strptime(equipment.check_out_date, '%m/%d/%Y')
+                                        except ValueError:
+                                            check_out_parsed = datetime.now()  # Fallback
+                                else:
+                                    check_out_parsed = equipment.check_out_date
+                            else:
+                                check_out_parsed = datetime.now()  # Fallback if no date
+                            
+                            rental_data.append({
+                                'equipment_id': equipment.equipment_id,
+                                'equipment_name': f"{equipment.type} {equipment.model}" if equipment.model else equipment.type,
+                                'equipment_type': equipment.type,
+                                'equipment_serial': equipment.serial_number or equipment.equipment_id,
+                                'operator_name': equipment.last_operator_id or "Unknown Operator",
+                                'operator_email': f"{equipment.last_operator_id}@company.com" if equipment.last_operator_id else "operator@company.com",
+                                'operator_phone': "N/A",
+                                'site_name': f"Site {equipment.site_id}" if equipment.site_id else "Unknown Site",
+                                'site_contact_email': f"{equipment.site_id}@company.com" if equipment.site_id else "site@company.com",
+                                'site_contact_phone': "N/A",
+                                'check_out_date': check_out_parsed,
+                                'expected_return_date': expected_return,
+                                'days_overdue': days_overdue,
+                                'rental_rate': 500.0  # Default daily rate
+                            })
+                except Exception as e:
+                    logger.warning(f"Error processing equipment {equipment.equipment_id}: {e}")
+                    continue
             
             return rental_data
             
@@ -132,6 +205,22 @@ class NotificationService:
         msg['To'] = rental_data['operator_email']
         msg['Subject'] = f"Equipment Return Reminder - {rental_data['equipment_name']}"
         
+        # Format dates safely
+        checkout_date_str = "N/A"
+        expected_return_str = "N/A"
+        
+        try:
+            if rental_data['check_out_date'] and hasattr(rental_data['check_out_date'], 'strftime'):
+                checkout_date_str = rental_data['check_out_date'].strftime('%B %d, %Y')
+        except (AttributeError, ValueError, TypeError):
+            checkout_date_str = str(rental_data['check_out_date']) if rental_data['check_out_date'] else "N/A"
+        
+        try:
+            if rental_data['expected_return_date'] and hasattr(rental_data['expected_return_date'], 'strftime'):
+                expected_return_str = rental_data['expected_return_date'].strftime('%B %d, %Y')
+        except (AttributeError, ValueError, TypeError):
+            expected_return_str = str(rental_data['expected_return_date']) if rental_data['expected_return_date'] else "N/A"
+        
         # Email body
         body = f"""
 Dear {rental_data['operator_name']},
@@ -142,8 +231,8 @@ Equipment Details:
 • Equipment: {rental_data['equipment_name']} ({rental_data['equipment_type']})
 • Serial Number: {rental_data['equipment_serial']}
 • Site: {rental_data['site_name']}
-• Checkout Date: {rental_data['check_out_date'].strftime('%B %d, %Y')}
-• Expected Return Date: {rental_data['expected_return_date'].strftime('%B %d, %Y')}
+• Checkout Date: {checkout_date_str}
+• Expected Return Date: {expected_return_str}
 • Daily Rate: ${rental_data['rental_rate']:,.2f}
 
 Please ensure the equipment is returned on time to avoid late fees. If you need to extend the rental period, please contact us immediately.
@@ -171,6 +260,22 @@ Smart Rental Tracker System
         # Calculate late fees (assuming 10% daily penalty)
         late_fee = rental_data['rental_rate'] * 0.1 * rental_data['days_overdue']
         
+        # Format dates safely
+        checkout_date_str = "N/A"
+        expected_return_str = "N/A"
+        
+        try:
+            if rental_data['check_out_date'] and hasattr(rental_data['check_out_date'], 'strftime'):
+                checkout_date_str = rental_data['check_out_date'].strftime('%B %d, %Y')
+        except (AttributeError, ValueError, TypeError):
+            checkout_date_str = str(rental_data['check_out_date']) if rental_data['check_out_date'] else "N/A"
+        
+        try:
+            if rental_data['expected_return_date'] and hasattr(rental_data['expected_return_date'], 'strftime'):
+                expected_return_str = rental_data['expected_return_date'].strftime('%B %d, %Y')
+        except (AttributeError, ValueError, TypeError):
+            expected_return_str = str(rental_data['expected_return_date']) if rental_data['expected_return_date'] else "N/A"
+        
         body = f"""
 Dear {rental_data['operator_name']},
 
@@ -180,8 +285,8 @@ Equipment Details:
 • Equipment: {rental_data['equipment_name']} ({rental_data['equipment_type']})
 • Serial Number: {rental_data['equipment_serial']}
 • Site: {rental_data['site_name']}
-• Checkout Date: {rental_data['check_out_date'].strftime('%B %d, %Y')}
-• Expected Return Date: {rental_data['expected_return_date'].strftime('%B %d, %Y')}
+• Checkout Date: {checkout_date_str}
+• Expected Return Date: {expected_return_str}
 • Days Overdue: {rental_data['days_overdue']}
 • Daily Rate: ${rental_data['rental_rate']:,.2f}
 • Estimated Late Fees: ${late_fee:,.2f}

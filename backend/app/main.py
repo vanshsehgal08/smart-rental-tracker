@@ -2,27 +2,20 @@ from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from typing import List, Optional
-
-import models
-import schemas
-import crud
-from database import engine, get_db
 import threading
 import schedule
 import time
 import logging
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-import pandas as pd
 import os
 from app import models
 from app import schemas
 from app import crud
 from app.database import engine, get_db
 from app.routers import ml_integration
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Create database tables
 models.Base.metadata.create_all(bind=engine)
@@ -34,14 +27,14 @@ scheduler_running = False
 def run_scheduled_notifications():
     """Run the notification service"""
     try:
-        from notification_service import NotificationService
+        from app.notification_service import NotificationService
         logger.info("Running scheduled notification check...")
         
         notification_service = NotificationService()
         
         # Test email configuration
         if not notification_service.test_email_configuration():
-            logger.error("Email configuration test failed. Skipping notification run.")
+            logger.warning("Email configuration test failed. Email notifications will be disabled.")
             return
         
         # Send return reminders
@@ -82,11 +75,7 @@ def schedule_runner():
 # Initialize FastAPI app
 app = FastAPI(
     title="Smart Rental Tracking System",
-
-    description="API for tracking construction and mining equipment rentals with automated notifications",
-
-    description="API for tracking construction and mining equipment rentals with ML-powered demand forecasting and anomaly detection",
-
+    description="API for tracking construction and mining equipment rentals with ML-powered demand forecasting, anomaly detection, and automated notifications",
     version="1.0.0"
 )
 
@@ -131,196 +120,216 @@ def read_root():
     return {"message": "Smart Rental Tracking System API", "version": "1.0.0"}
 
 
-def load_csv_data():
-    """Load data from the CSV file"""
-    try:
-        csv_path = os.path.join(os.path.dirname(__file__), '..', '..', 'database', 'data.csv')
-        df = pd.read_csv(csv_path)
-        return df
-    except Exception as e:
-        print(f"Error loading CSV data: {e}")
-        return None
-
-
 @app.get("/dashboard")
-def get_dashboard_data():
-    """Get dashboard overview data from real CSV data"""
-    df = load_csv_data()
-    
-    if df is None or df.empty:
-        # Fallback to mock data if CSV can't be loaded
+def get_dashboard_data(db: Session = Depends(get_db)):
+    """Get dashboard overview data from database"""
+    try:
+        # Get all equipment from database
+        equipment_list = crud.get_equipment_list(db, limit=1000)
+        
+        if not equipment_list:
+            return {
+                "overview": {
+                    "total_equipment": 0,
+                    "active_rentals": 0,
+                    "anomalies": 0,
+                    "utilization_rate": 0
+                },
+                "equipment_stats": {},
+                "anomalies": {"summary": {"total_anomalies": 0}, "anomalies": []},
+                "recommendations": ["No equipment data available"]
+            }
+        
+        # Calculate statistics from database data
+        total_equipment = len(equipment_list)
+        active_rentals = len([eq for eq in equipment_list if eq.site_id])
+        total_engine_hours = sum([eq.engine_hours_per_day or 0 for eq in equipment_list])
+        total_idle_hours = sum([eq.idle_hours_per_day or 0 for eq in equipment_list])
+        
+        utilization_rate = 0
+        if total_engine_hours + total_idle_hours > 0:
+            utilization_rate = round((total_engine_hours / (total_engine_hours + total_idle_hours) * 100), 1)
+        
+        # Calculate anomalies based on database data
+        anomalies = []
+        anomaly_count = 0
+        
+        for eq in equipment_list:
+            engine_hours = eq.engine_hours_per_day or 0
+            idle_hours = eq.idle_hours_per_day or 0
+            total_hours = engine_hours + idle_hours
+            
+            if total_hours > 0:
+                utilization = engine_hours / total_hours
+                
+                # Detect anomalies
+                if idle_hours > engine_hours * 1.5:  # High idle time
+                    anomaly_count += 1
+                    anomalies.append({
+                        "equipment_id": eq.equipment_id,
+                        "type": eq.type,
+                        "anomaly_type": "high_idle_time",
+                        "severity": "high" if idle_hours > engine_hours * 2 else "medium",
+                        "anomaly_score": round(idle_hours / total_hours, 2),
+                        "site_id": eq.site_id or "Unassigned",
+                        "engine_hours_per_day": engine_hours,
+                        "idle_hours_per_day": idle_hours,
+                        "utilization_ratio": utilization,
+                        "check_out_date": eq.check_out_date,
+                        "check_in_date": eq.check_in_date
+                    })
+                elif utilization < 0.3:  # Low utilization
+                    anomaly_count += 1
+                    anomalies.append({
+                        "equipment_id": eq.equipment_id,
+                        "type": eq.type,
+                        "anomaly_type": "low_utilization",
+                        "severity": "medium" if utilization < 0.2 else "low",
+                        "anomaly_score": round(1 - utilization, 2),
+                        "site_id": eq.site_id or "Unassigned",
+                        "engine_hours_per_day": engine_hours,
+                        "idle_hours_per_day": idle_hours,
+                        "utilization_ratio": utilization,
+                        "check_out_date": eq.check_out_date,
+                        "check_in_date": eq.check_in_date
+                    })
+        
+        # Equipment type statistics
+        equipment_stats = {
+            "overview": {
+                "total_equipment": total_equipment,
+                "total_rentals": active_rentals,
+                "average_utilization": utilization_rate,
+                "total_engine_hours": round(total_engine_hours, 1)
+            },
+            "by_equipment_type": {}
+        }
+        
+        # Calculate stats by equipment type
+        equipment_types = {}
+        for eq in equipment_list:
+            eq_type = eq.type.lower()
+            if eq_type not in equipment_types:
+                equipment_types[eq_type] = []
+            equipment_types[eq_type].append(eq)
+        
+        for equipment_type, type_equipment in equipment_types.items():
+            type_engine_hours = sum([eq.engine_hours_per_day or 0 for eq in type_equipment])
+            type_idle_hours = sum([eq.idle_hours_per_day or 0 for eq in type_equipment])
+            type_total_hours = type_engine_hours + type_idle_hours
+            
+            type_utilization = 0
+            if type_total_hours > 0:
+                type_utilization = round((type_engine_hours / type_total_hours * 100), 1)
+            
+            equipment_stats["by_equipment_type"][equipment_type] = {
+                "count": len(type_equipment),
+                "utilization": type_utilization,
+                "avg_utilization": type_utilization,
+                "avg_efficiency": round(type_utilization / 100, 2)
+            }
+        
+        # Generate recommendations based on database data
+        recommendations = []
+        if anomaly_count > 0:
+            recommendations.append(f"Address {anomaly_count} equipment anomalies to improve utilization")
+        
+        low_utilization_types = [k for k, v in equipment_stats["by_equipment_type"].items() if v["utilization"] < 60]
+        if low_utilization_types:
+            recommendations.append(f"Focus on improving utilization for {', '.join(low_utilization_types)} equipment")
+        
+        if not recommendations:
+            recommendations.append("All equipment types are performing well")
+        
         return {
             "overview": {
-                "total_equipment": 0,
-                "active_rentals": 0,
-                "anomalies": 0,
-                "utilization_rate": 0
+                "total_equipment": total_equipment,
+                "active_rentals": active_rentals,
+                "anomalies": anomaly_count,
+                "utilization_rate": utilization_rate
             },
-            "equipment_stats": None,
-            "anomalies": None,
-            "recommendations": None
+            "equipment_stats": equipment_stats,
+            "anomalies": {
+                "summary": {
+                    "total_anomalies": anomaly_count,
+                    "total_records": total_equipment,
+                    "anomaly_types": {
+                        "high_idle_time": len([a for a in anomalies if a["anomaly_type"] == "high_idle_time"]),
+                        "low_utilization": len([a for a in anomalies if a["anomaly_type"] == "low_utilization"])
+                    }
+                },
+                "anomalies": anomalies
+            },
+            "recommendations": recommendations
         }
     
-    # Calculate real statistics from CSV data
-    total_equipment = len(df)
-    active_rentals = len(df[df['User ID'].notna()])  # Equipment with assigned users
-    utilization_rate = round((df['Engine Hours/Day'].sum() / (df['Engine Hours/Day'].sum() + df['Idle Hours/Day'].sum()) * 100), 1)
-    
-    # Calculate anomalies based on real data
-    anomalies = []
-    anomaly_count = 0
-    
-    for _, row in df.iterrows():
-        engine_hours = row['Engine Hours/Day']
-        idle_hours = row['Idle Hours/Day']
-        total_hours = engine_hours + idle_hours
+    except Exception as e:
+        print(f"Error getting dashboard data: {e}")
+        raise HTTPException(status_code=500, detail="Error getting dashboard data")
+
+
+@app.get("/equipment-stats")
+def get_equipment_stats(db: Session = Depends(get_db)):
+    """Get statistics about the equipment data from database"""
+    try:
+        equipment_list = crud.get_equipment_list(db, limit=1000)
         
-        if total_hours > 0:
-            utilization = engine_hours / total_hours
+        if not equipment_list:
+            return {"error": "No equipment data available"}
+        
+        # Basic stats
+        total_records = len(equipment_list)
+        equipment_types = {}
+        total_engine_hours = 0
+        total_idle_hours = 0
+        records_with_sites = 0
+        records_with_operators = 0
+        
+        for eq in equipment_list:
+            # Count by type
+            if eq.type in equipment_types:
+                equipment_types[eq.type] += 1
+            else:
+                equipment_types[eq.type] = 1
             
-            # Detect anomalies
-            if idle_hours > engine_hours * 1.5:  # High idle time
-                anomaly_count += 1
-                anomalies.append({
-                    "equipment_id": row['Equipment ID'],
-                    "type": row['Type'],
-                    "anomaly_type": "high_idle_time",
-                    "severity": "high" if idle_hours > engine_hours * 2 else "medium",
-                    "anomaly_score": round(idle_hours / total_hours, 2),
-                    "site_id": row['User ID'] if pd.notna(row['User ID']) else "Unassigned",
-                    "engine_hours_per_day": engine_hours,
-                    "idle_hours_per_day": idle_hours,
-                    "utilization_ratio": utilization,
-                    "check_out_date": row['Check-Out Date'],
-                    "check_in_date": row['Check-in Date']
-                })
-            elif utilization < 0.3:  # Low utilization
-                anomaly_count += 1
-                anomalies.append({
-                    "equipment_id": row['Equipment ID'],
-                    "type": row['Type'],
-                    "anomaly_type": "low_utilization",
-                    "severity": "medium" if utilization < 0.2 else "low",
-                    "anomaly_score": round(1 - utilization, 2),
-                    "site_id": row['User ID'] if pd.notna(row['User ID']) else "Unassigned",
-                    "engine_hours_per_day": engine_hours,
-                    "idle_hours_per_day": idle_hours,
-                    "utilization_ratio": utilization,
-                    "check_out_date": row['Check-Out Date'],
-                    "check_in_date": row['Check-in Date']
-                })
-    
-    # Equipment type statistics
-    equipment_stats = {
-        "overview": {
-            "total_equipment": total_equipment,
-            "total_rentals": active_rentals,
-            "average_utilization": utilization_rate,
-            "total_engine_hours": round(df['Engine Hours/Day'].sum(), 1)
-        },
-        "by_equipment_type": {}
-    }
-    
-    # Calculate stats by equipment type
-    for equipment_type in df['Type'].unique():
-        type_data = df[df['Type'] == equipment_type]
-        type_count = len(type_data)
-        type_utilization = round((type_data['Engine Hours/Day'].sum() / (type_data['Engine Hours/Day'].sum() + type_data['Idle Hours/Day'].sum()) * 100), 1)
+            # Sum hours
+            total_engine_hours += eq.engine_hours_per_day or 0
+            total_idle_hours += eq.idle_hours_per_day or 0
+            
+            # Count assignments
+            if eq.site_id:
+                records_with_sites += 1
+            if eq.last_operator_id:
+                records_with_operators += 1
         
-        equipment_stats["by_equipment_type"][equipment_type.lower()] = {
-            "count": type_count,
-            "utilization": type_utilization,
-            "avg_utilization": type_utilization,
-            "avg_efficiency": round(type_utilization / 100, 2)
-        }
-    
-    # Generate recommendations based on real data
-    recommendations = []
-    if anomaly_count > 0:
-        recommendations.append(f"Address {anomaly_count} equipment anomalies to improve utilization")
-    
-    low_utilization_types = [k for k, v in equipment_stats["by_equipment_type"].items() if v["utilization"] < 60]
-    if low_utilization_types:
-        recommendations.append(f"Focus on improving utilization for {', '.join(low_utilization_types)} equipment")
-    
-    if not recommendations:
-        recommendations.append("All equipment types are performing well")
-    
-    return {
-        "overview": {
-            "total_equipment": total_equipment,
-            "active_rentals": active_rentals,
-            "anomalies": anomaly_count,
-            "utilization_rate": utilization_rate
-        },
-        "equipment_stats": equipment_stats,
-        "anomalies": {
+        avg_engine_hours = total_engine_hours / total_records if total_records > 0 else 0
+        avg_idle_hours = total_idle_hours / total_records if total_records > 0 else 0
+        avg_utilization = 0
+        
+        if total_engine_hours + total_idle_hours > 0:
+            avg_utilization = (total_engine_hours / (total_engine_hours + total_idle_hours)) * 100
+        
+        return {
             "summary": {
-                "total_anomalies": anomaly_count,
-                "total_records": total_equipment,
-                "anomaly_types": {
-                    "high_idle_time": len([a for a in anomalies if a["anomaly_type"] == "high_idle_time"]),
-                    "low_utilization": len([a for a in anomalies if a["anomaly_type"] == "low_utilization"])
-                }
+                "total_records": total_records,
+                "total_engine_hours": round(total_engine_hours, 1),
+                "total_idle_hours": round(total_idle_hours, 1),
+                "average_engine_hours_per_day": round(avg_engine_hours, 1),
+                "average_idle_hours_per_day": round(avg_idle_hours, 1),
+                "average_utilization_percentage": round(avg_utilization, 1)
             },
-            "anomalies": anomalies
-        },
-        "recommendations": recommendations
-    }
-
-
-@app.get("/csv-stats")
-def get_csv_stats():
-    """Get statistics about the CSV data"""
-    df = load_csv_data()
-    
-    if df is None or df.empty:
-        return {"error": "CSV data not available"}
-    
-    # Basic stats
-    total_records = len(df)
-    equipment_types = df['Type'].value_counts().to_dict()
-    total_engine_hours = df['Engine Hours/Day'].sum()
-    total_idle_hours = df['Idle Hours/Day'].sum()
-    avg_engine_hours = df['Engine Hours/Day'].mean()
-    avg_idle_hours = df['Idle Hours/Day'].mean()
-    
-    # Utilization analysis
-    df_with_utilization = df.copy()
-    df_with_utilization['total_hours'] = df['Engine Hours/Day'] + df['Idle Hours/Day']
-    df_with_utilization['utilization'] = df['Engine Hours/Day'] / df_with_utilization['total_hours']
-    df_with_utilization = df_with_utilization[df_with_utilization['total_hours'] > 0]
-    
-    avg_utilization = df_with_utilization['utilization'].mean() * 100 if len(df_with_utilization) > 0 else 0
-    
-    # Date range
-    check_out_dates = pd.to_datetime(df['Check-Out Date'], errors='coerce')
-    check_in_dates = pd.to_datetime(df['Check-in Date'], errors='coerce')
-    
-    date_range = {
-        "earliest_checkout": check_out_dates.min().strftime('%Y-%m-%d') if not check_out_dates.isna().all() else None,
-        "latest_checkin": check_in_dates.max().strftime('%Y-%m-%d') if not check_in_dates.isna().all() else None,
-        "total_days_covered": (check_in_dates.max() - check_out_dates.min()).days if not (check_out_dates.isna().all() or check_in_dates.isna().all()) else 0
-    }
-    
-    return {
-        "summary": {
-            "total_records": total_records,
-            "total_engine_hours": round(total_engine_hours, 1),
-            "total_idle_hours": round(total_idle_hours, 1),
-            "average_engine_hours_per_day": round(avg_engine_hours, 1),
-            "average_idle_hours_per_day": round(avg_idle_hours, 1),
-            "average_utilization_percentage": round(avg_utilization, 1)
-        },
-        "equipment_types": equipment_types,
-        "date_range": date_range,
-        "data_quality": {
-            "records_with_users": len(df[df['User ID'].notna()]),
-            "records_without_users": len(df[df['User ID'].isna()]),
-            "records_with_operators": len(df[df['Last Operator ID'].notna()]),
-            "records_without_operators": len(df[df['Last Operator ID'].isna()])
+            "equipment_types": equipment_types,
+            "assignments": {
+                "records_with_sites": records_with_sites,
+                "records_without_sites": total_records - records_with_sites,
+                "records_with_operators": records_with_operators,
+                "records_without_operators": total_records - records_with_operators
+            }
         }
-    }
+    
+    except Exception as e:
+        print(f"Error getting equipment stats: {e}")
+        raise HTTPException(status_code=500, detail="Error getting equipment statistics")
 
 
 # Equipment endpoints
@@ -334,45 +343,13 @@ def create_equipment(equipment: schemas.EquipmentCreate, db: Session = Depends(g
 
 @app.get("/equipment/")
 def read_equipment(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    """Get equipment from both database and CSV"""
+    """Get equipment from database"""
     try:
-        # Try to get from CSV first (real data)
-        df = load_csv_data()
-        if df is not None and not df.empty:
-            # Convert CSV data to equipment format
-            equipment_list = []
-            for _, row in df.iterrows():
-                equipment_item = {
-                    "id": len(equipment_list) + 1,
-                    "equipment_id": row['Equipment ID'],
-                    "type": row['Type'],
-                    "model": row['Type'],  # Use type as model since CSV doesn't have separate model
-                    "manufacturer": "Various",  # CSV doesn't have manufacturer
-                    "year": 2024,  # CSV doesn't have year
-                    "status": "rented" if pd.notna(row['User ID']) else "available",
-                    "created_at": row['Check-Out Date'],
-                    "updated_at": row['Check-in Date'],
-                    "site_id": row['User ID'] if pd.notna(row['User ID']) else None,
-                    "operator_id": row['Last Operator ID'] if pd.notna(row['Last Operator ID']) else None,
-                    "engine_hours": row['Engine Hours/Day'],
-                    "idle_hours": row['Idle Hours/Day'],
-                    "operating_days": row['Operating Days']
-                }
-                equipment_list.append(equipment_item)
-            
-            # Apply pagination
-            start = skip
-            end = start + limit
-            return equipment_list[start:end]
-        
-        # Fallback to database if CSV fails
         equipment = crud.get_equipment_list(db, skip=skip, limit=limit)
         return equipment
     except Exception as e:
         print(f"Error reading equipment: {e}")
-        # Fallback to database
-        equipment = crud.get_equipment_list(db, skip=skip, limit=limit)
-        return equipment
+        raise HTTPException(status_code=500, detail="Error reading equipment data")
 
 
 @app.get("/equipment/{equipment_id}", response_model=schemas.Equipment)
@@ -581,7 +558,7 @@ def detect_anomalies(db: Session = Depends(get_db)):
 @app.get("/notifications/upcoming-returns")
 def get_upcoming_returns():
     """Get equipment rentals due for return within notification window"""
-    from notification_service import NotificationService
+    from app.notification_service import NotificationService
     notification_service = NotificationService()
     upcoming_rentals = notification_service.get_upcoming_returns()
     return {
@@ -593,7 +570,7 @@ def get_upcoming_returns():
 @app.get("/notifications/overdue-rentals")
 def get_overdue_rentals():
     """Get overdue equipment rentals"""
-    from notification_service import NotificationService
+    from app.notification_service import NotificationService
     notification_service = NotificationService()
     overdue_rentals = notification_service.get_overdue_rentals()
     return {
@@ -605,7 +582,7 @@ def get_overdue_rentals():
 @app.post("/notifications/send-return-reminders")
 def send_return_reminders():
     """Send return reminder emails for upcoming due dates"""
-    from notification_service import NotificationService
+    from app.notification_service import NotificationService
     notification_service = NotificationService()
     
     # Test email configuration first
@@ -625,7 +602,7 @@ def send_return_reminders():
 @app.post("/notifications/send-overdue-notifications")
 def send_overdue_notifications():
     """Send overdue rental notifications"""
-    from notification_service import NotificationService
+    from app.notification_service import NotificationService
     notification_service = NotificationService()
     
     # Test email configuration first
@@ -645,7 +622,7 @@ def send_overdue_notifications():
 @app.post("/notifications/test-email-config")
 def test_email_configuration():
     """Test email configuration"""
-    from notification_service import NotificationService
+    from app.notification_service import NotificationService
     notification_service = NotificationService()
     
     if notification_service.test_email_configuration():
@@ -660,7 +637,7 @@ def test_email_configuration():
 @app.post("/notifications/run-all")
 def run_all_notifications():
     """Run all notification checks and send emails"""
-    from notification_service import NotificationService
+    from app.notification_service import NotificationService
     notification_service = NotificationService()
     
     # Test email configuration first
