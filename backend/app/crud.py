@@ -2,8 +2,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, func
 from datetime import datetime, timedelta
 from typing import List, Optional
-import models
-import schemas
+from app import models
+from app import schemas
 
 
 # Equipment CRUD
@@ -130,6 +130,15 @@ def create_rental(db: Session, rental: schemas.RentalCreate):
     if equipment:
         equipment.status = "rented"
     
+    db.add(db_rental)
+    db.commit()
+    db.refresh(db_rental)
+    return db_rental
+
+
+def create_rental_manual(db: Session, rental: schemas.RentalCreate):
+    """Create rental without changing equipment status - for manual management"""
+    db_rental = models.Rental(**rental.dict(), status="active")
     db.add(db_rental)
     db.commit()
     db.refresh(db_rental)
@@ -354,3 +363,49 @@ def detect_overdue_rentals(db: Session):
             alerts.append(create_alert(db, alert))
     
     return alerts
+
+
+# Demand Forecast CRUD
+def create_demand_forecast(db: Session, forecast_data: dict):
+    """Create a new demand forecast record"""
+    db_forecast = models.DemandForecast(**forecast_data)
+    db.add(db_forecast)
+    db.commit()
+    db.refresh(db_forecast)
+    return db_forecast
+
+
+def get_demand_forecasts(
+    db: Session, 
+    site_id: Optional[str] = None, 
+    equipment_type: Optional[str] = None,
+    days_back: int = 30
+):
+    """Get demand forecasts with optional filtering"""
+    query = db.query(models.DemandForecast)
+    
+    if site_id:
+        query = query.filter(models.DemandForecast.site_id == site_id)
+    
+    if equipment_type:
+        query = query.filter(models.DemandForecast.equipment_type == equipment_type)
+    
+    if days_back:
+        cutoff_date = datetime.utcnow() - timedelta(days=days_back)
+        query = query.filter(models.DemandForecast.forecast_date >= cutoff_date)
+    
+    return query.order_by(models.DemandForecast.forecast_date.desc()).all()
+
+
+def update_demand_forecast_actual(db: Session, forecast_id: int, actual_demand: int):
+    """Update forecast with actual demand for model validation"""
+    db_forecast = db.query(models.DemandForecast).filter(
+        models.DemandForecast.id == forecast_id
+    ).first()
+    
+    if db_forecast:
+        db_forecast.actual_demand = actual_demand
+        db.commit()
+        db.refresh(db_forecast)
+    
+    return db_forecast
