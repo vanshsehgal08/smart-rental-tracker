@@ -1,271 +1,172 @@
+#!/usr/bin/env python3
 """
-Data seeding script to populate the database with sample data
+Data Seeding Script for Smart Rental Tracking System
+Populates the database with sample equipment, sites, and operators
 """
-from datetime import datetime, timedelta
+
 import sys
 import os
+from datetime import datetime, timedelta
+import random
 
-# Add the app directory to the path
-sys.path.append(os.path.join(os.path.dirname(__file__), 'app'))
+# Add the backend directory to the path
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-# Change to app directory so database is created in the right place
-os.chdir(os.path.join(os.path.dirname(__file__), 'app'))
+from app.database import engine, SessionLocal
+from app.models import Base, Equipment, Site, Operator, Rental, UsageLog
 
-from database import SessionLocal, engine
-import models
-import schemas
-import crud
-
-# Create tables
-models.Base.metadata.create_all(bind=engine)
-
-def seed_data():
+def create_sample_data():
+    """Create sample data for the system"""
+    
+    # Create database tables
+    Base.metadata.create_all(bind=engine)
+    
     db = SessionLocal()
     
     try:
-        # Create Sites
-        sites_data = [
-            {"site_id": "S001", "name": "Downtown Construction Site", "location": "Downtown", "contact_person": "John Manager"},
-            {"site_id": "S002", "name": "Highway Bridge Project", "location": "Highway 95", "contact_person": "Sarah Engineer"},
-            {"site_id": "S003", "name": "Mining Site Alpha", "location": "North Ridge", "contact_person": "Mike Supervisor"},
-            {"site_id": "S004", "name": "Residential Complex", "location": "Suburbia", "contact_person": "Lisa Coordinator"},
-            {"site_id": "S006", "name": "Industrial Park", "location": "East Zone", "contact_person": "Tom Director"},
+        # Check if data already exists
+        if db.query(Equipment).count() > 0:
+            print("Database already contains data. Skipping seeding.")
+            return
+        
+        print("🌱 Seeding database with sample data...")
+        
+        # Create sample sites
+        sites = []
+        site_data = [
+            {"site_id": "S001", "name": "Downtown Construction", "location": "Downtown", "address": "123 Main St, Downtown"},
+            {"site_id": "S002", "name": "Highway Project", "location": "Highway 101", "address": "456 Highway 101, Suburb"},
+            {"site_id": "S003", "name": "Mining Site Alpha", "location": "Mining District", "address": "789 Mine Rd, Mining District"},
+            {"site_id": "S004", "name": "Residential Complex", "location": "Residential Area", "address": "321 Home Ave, Residential Area"},
+            {"site_id": "S005", "name": "Industrial Park", "location": "Industrial Zone", "address": "654 Industry Blvd, Industrial Zone"},
         ]
         
-        for site_data in sites_data:
-            existing_site = crud.get_site_by_site_id(db, site_data["site_id"])
-            if not existing_site:
-                site = schemas.SiteCreate(**site_data)
-                crud.create_site(db, site)
-                print(f"Created site: {site_data['site_id']}")
+        for site_info in site_data:
+            site = Site(**site_info)
+            db.add(site)
+            sites.append(site)
         
-        # Create Operators
-        operators_data = [
-            {"operator_id": "OP101", "name": "Alex Thompson", "license_number": "LIC001", "certification_level": "Senior"},
-            {"operator_id": "OP103", "name": "Maria Rodriguez", "license_number": "LIC003", "certification_level": "Expert"},
-            {"operator_id": "OP106", "name": "David Chen", "license_number": "LIC006", "certification_level": "Intermediate"},
-            {"operator_id": "OP114", "name": "Emma Wilson", "license_number": "LIC014", "certification_level": "Senior"},
+        db.commit()
+        print(f"✅ Created {len(sites)} sites")
+        
+        # Create sample operators
+        operators = []
+        operator_data = [
+            {"operator_id": "OP001", "name": "John Smith", "license_number": "L12345", "phone": "555-0101", "email": "john.smith@company.com", "certification_level": "Senior"},
+            {"operator_id": "OP002", "name": "Sarah Johnson", "license_number": "L12346", "phone": "555-0102", "email": "sarah.johnson@company.com", "certification_level": "Intermediate"},
+            {"operator_id": "OP003", "name": "Mike Davis", "license_number": "L12347", "phone": "555-0103", "email": "mike.davis@company.com", "certification_level": "Senior"},
+            {"operator_id": "OP004", "name": "Lisa Wilson", "license_number": "L12348", "phone": "555-0104", "email": "lisa.wilson@company.com", "certification_level": "Junior"},
+            {"operator_id": "OP005", "name": "Tom Brown", "license_number": "L12349", "phone": "555-0105", "email": "tom.brown@company.com", "certification_level": "Intermediate"},
         ]
         
-        for operator_data in operators_data:
-            existing_operator = crud.get_operator_by_operator_id(db, operator_data["operator_id"])
-            if not existing_operator:
-                operator = schemas.OperatorCreate(**operator_data)
-                crud.create_operator(db, operator)
-                print(f"Created operator: {operator_data['operator_id']}")
+        for operator_info in operator_data:
+            operator = Operator(**operator_info)
+            db.add(operator)
+            operators.append(operator)
         
-        # Create Equipment
-        equipment_data = [
-            {"equipment_id": "EQX1001", "type": "Excavator", "model": "CAT 320", "manufacturer": "Caterpillar", "status": "available"},
-            {"equipment_id": "EQX1002", "type": "Crane", "model": "Liebherr LTM", "manufacturer": "Liebherr", "status": "available"},
-            {"equipment_id": "EQX1003", "type": "Bulldozer", "model": "CAT D6", "manufacturer": "Caterpillar", "status": "available"},
-            {"equipment_id": "EQX1004", "type": "Excavator", "model": "Komatsu PC200", "manufacturer": "Komatsu", "status": "available"},
-            {"equipment_id": "EQX1005", "type": "Bulldozer", "model": "CAT D8", "manufacturer": "Caterpillar", "status": "available"},
-            {"equipment_id": "EQX1006", "type": "Grader", "model": "CAT 140M", "manufacturer": "Caterpillar", "status": "available"},
-            {"equipment_id": "EQX1007", "type": "Excavator", "model": "Volvo EC220", "manufacturer": "Volvo", "status": "available"},
-        ]
+        db.commit()
+        print(f"✅ Created {len(operators)} operators")
         
-        for equip_data in equipment_data:
-            existing_equipment = crud.get_equipment_by_equipment_id(db, equip_data["equipment_id"])
-            if not existing_equipment:
-                equipment = schemas.EquipmentCreate(**equip_data)
-                crud.create_equipment(db, equipment)
-                print(f"Created equipment: {equip_data['equipment_id']}")
+        # Create sample equipment
+        equipment = []
+        equipment_types = ["Excavator", "Bulldozer", "Crane", "Grader", "Loader"]
+        manufacturers = ["Caterpillar", "Komatsu", "Hitachi", "Volvo", "Liebherr"]
+        models = ["CAT320", "KOM200", "HIT150", "VOLG", "LIE100"]
         
-        # Create historical rentals based on the sample data
-        rental_data = [
-            {
-                "equipment_id": "EQX1001",
-                "site_id": "S003",
-                "operator_id": "OP101",
-                "check_out_date": datetime(2025, 4, 1),
-                "check_in_date": datetime(2025, 4, 16),
-                "rental_rate_per_day": 450.0,
-                "status": "completed"
-            },
-            {
-                "equipment_id": "EQX1002",
-                "site_id": None,
-                "operator_id": None,
-                "check_out_date": datetime(2025, 2, 10),
-                "check_in_date": datetime(2025, 3, 12),
-                "rental_rate_per_day": 650.0,
-                "status": "completed"
-            },
-            {
-                "equipment_id": "EQX1003",
-                "site_id": "S002",
-                "operator_id": "OP103",
-                "check_out_date": datetime(2025, 2, 15),
-                "check_in_date": datetime(2025, 3, 11),
-                "rental_rate_per_day": 520.0,
-                "status": "completed"
-            },
-            {
-                "equipment_id": "EQX1004",
-                "site_id": "S004",
-                "operator_id": "OP106",
-                "check_out_date": datetime(2025, 5, 5),
-                "check_in_date": datetime(2025, 5, 15),
-                "rental_rate_per_day": 430.0,
-                "status": "completed"
-            },
-            {
-                "equipment_id": "EQX1005",
-                "site_id": "S006",
-                "operator_id": "OP101",
-                "check_out_date": datetime(2025, 1, 1),
-                "check_in_date": datetime(2025, 1, 31),
-                "rental_rate_per_day": 580.0,
-                "status": "completed"
-            },
-            {
-                "equipment_id": "EQX1006",
-                "site_id": "S001",
-                "operator_id": "OP114",
-                "check_out_date": datetime(2025, 4, 5),
-                "check_in_date": datetime(2025, 4, 23),
-                "rental_rate_per_day": 380.0,
-                "status": "completed"
-            },
-            {
-                "equipment_id": "EQX1007",
-                "site_id": None,
-                "operator_id": None,
-                "check_out_date": datetime(2025, 3, 20),
-                "check_in_date": datetime(2025, 4, 1),
-                "rental_rate_per_day": 440.0,
-                "status": "completed"
+        for i in range(20):
+            equipment_info = {
+                "equipment_id": f"EQX{1000 + i}",
+                "type": random.choice(equipment_types),
+                "model": random.choice(models),
+                "manufacturer": random.choice(manufacturers),
+                "year": random.randint(2018, 2024),
+                "serial_number": f"SN{random.randint(100000, 999999)}",
+                "status": random.choice(["available", "rented", "maintenance"]),
             }
-        ]
+            
+            equipment_item = Equipment(**equipment_info)
+            db.add(equipment_item)
+            equipment.append(equipment_item)
         
-        for rental_info in rental_data:
-            # Get equipment and site IDs
-            equipment = crud.get_equipment_by_equipment_id(db, rental_info["equipment_id"])
-            site = None
-            operator = None
+        db.commit()
+        print(f"✅ Created {len(equipment)} equipment items")
+        
+        # Create sample rentals
+        rentals = []
+        for i in range(15):
+            # Random dates within the last 6 months
+            start_date = datetime.now() - timedelta(days=random.randint(1, 180))
+            duration = random.randint(1, 30)
+            end_date = start_date + timedelta(days=duration)
             
-            if rental_info["site_id"]:
-                site = crud.get_site_by_site_id(db, rental_info["site_id"])
-            if rental_info["operator_id"]:
-                operator = crud.get_operator_by_operator_id(db, rental_info["operator_id"])
+            rental_info = {
+                "equipment_id": random.choice(equipment).id,
+                "site_id": random.choice(sites).id if random.random() > 0.2 else None,  # 20% unassigned
+                "operator_id": random.choice(operators).id if random.random() > 0.3 else None,  # 30% unassigned
+                "check_out_date": start_date,
+                "check_in_date": end_date,
+                "expected_return_date": end_date,
+                "rental_rate_per_day": round(random.uniform(200, 800), 2),
+                "total_cost": round(random.uniform(200, 800) * duration, 2),
+                "status": "completed" if end_date < datetime.now() else "active",
+                "notes": f"Sample rental {i+1}",
+            }
             
-            if equipment:
-                rental_create = schemas.RentalCreate(
-                    equipment_id=equipment.id,
-                    site_id=site.id if site else None,
-                    operator_id=operator.id if operator else None,
-                    check_out_date=rental_info["check_out_date"],
-                    expected_return_date=rental_info["check_in_date"],
-                    rental_rate_per_day=rental_info["rental_rate_per_day"]
+            rental = Rental(**rental_info)
+            db.add(rental)
+            rentals.append(rental)
+        
+        db.commit()
+        print(f"✅ Created {len(rentals)} rentals")
+        
+        # Create sample usage logs
+        usage_logs = []
+        for rental in rentals:
+            # Create daily usage logs for the rental period
+            current_date = rental.check_out_date
+            while current_date <= rental.check_in_date:
+                # Generate realistic usage data
+                engine_hours = random.uniform(0, 12)  # 0-12 hours per day
+                idle_hours = random.uniform(0, 8)    # 0-8 idle hours per day
+                fuel_usage = round(engine_hours * random.uniform(2, 5), 2)  # 2-5 L per hour
+                
+                usage_log = UsageLog(
+                    rental_id=rental.id,
+                    equipment_id=rental.equipment_id,
+                    operator_id=rental.operator_id,
+                    date=current_date,
+                    engine_hours=round(engine_hours, 1),
+                    idle_hours=round(idle_hours, 1),
+                    fuel_usage=fuel_usage,
+                    location=f"Site {rental.site_id}" if rental.site_id else "Unassigned",
+                    notes=f"Daily usage log for {current_date.strftime('%Y-%m-%d')}"
                 )
                 
-                # Create rental
-                rental = crud.create_rental(db, rental_create)
-                
-                # Update rental with check-in date and status if completed
-                if rental_info["status"] == "completed":
-                    rental_update = schemas.RentalUpdate(
-                        check_in_date=rental_info["check_in_date"],
-                        status="completed",
-                        total_cost=rental_info["rental_rate_per_day"] * 
-                                  ((rental_info["check_in_date"] - rental_info["check_out_date"]).days + 1)
-                    )
-                    crud.update_rental(db, rental.id, rental_update)
-                    
-                    # Set equipment back to available
-                    equipment_update = schemas.EquipmentUpdate(status="available")
-                    crud.update_equipment(db, equipment.id, equipment_update)
-                
-                print(f"Created rental for equipment: {rental_info['equipment_id']}")
+                usage_logs.append(usage_log)
+                current_date += timedelta(days=1)
         
-        # Create some sample usage logs
-        usage_data = [
-            {"equipment_id": "EQX1001", "engine_hours": 1.5, "idle_hours": 10, "operating_days": 15},
-            {"equipment_id": "EQX1002", "engine_hours": 5.0, "idle_hours": 11, "operating_days": 20},
-            {"equipment_id": "EQX1003", "engine_hours": 7.5, "idle_hours": 8.5, "operating_days": 25},
-            {"equipment_id": "EQX1004", "engine_hours": 2.0, "idle_hours": 9, "operating_days": 10},
-            {"equipment_id": "EQX1005", "engine_hours": 8.0, "idle_hours": 0, "operating_days": 30},
-            {"equipment_id": "EQX1006", "engine_hours": 3.0, "idle_hours": 6, "operating_days": 18},
-            {"equipment_id": "EQX1007", "engine_hours": 0.0, "idle_hours": 12, "operating_days": 12},
-        ]
+        # Add usage logs in batches
+        batch_size = 100
+        for i in range(0, len(usage_logs), batch_size):
+            batch = usage_logs[i:i + batch_size]
+            db.add_all(batch)
+            db.commit()
         
-        # Get all completed rentals for usage logs
-        completed_rentals = crud.get_rentals(db, status="completed", limit=100)
+        print(f"✅ Created {len(usage_logs)} usage logs")
         
-        for i, usage_info in enumerate(usage_data):
-            if i < len(completed_rentals):
-                rental = completed_rentals[i]
-                equipment = crud.get_equipment_by_equipment_id(db, usage_info["equipment_id"])
-                
-                if equipment and rental:
-                    # Create daily usage logs for the rental period
-                    days = (rental.check_in_date - rental.check_out_date).days + 1
-                    daily_engine_hours = usage_info["engine_hours"]
-                    daily_idle_hours = usage_info["idle_hours"]
-                    
-                    for day in range(min(days, 5)):  # Limit to 5 days for demo
-                        log_date = rental.check_out_date + timedelta(days=day)
-                        usage_log = schemas.UsageLogCreate(
-                            rental_id=rental.id,
-                            equipment_id=equipment.id,
-                            operator_id=rental.operator_id,
-                            date=log_date,
-                            engine_hours=daily_engine_hours,
-                            idle_hours=daily_idle_hours,
-                            fuel_usage=daily_engine_hours * 2.5,  # Approximate fuel usage
-                            condition_rating=8,
-                            maintenance_required=False
-                        )
-                        crud.create_usage_log(db, usage_log)
-                    
-                    print(f"Created usage logs for equipment: {usage_info['equipment_id']}")
-        
-        # Create some active rentals for demonstration
-        active_rentals = [
-            {
-                "equipment_id": "EQX1001",
-                "site_id": "S001",
-                "operator_id": "OP101",
-                "check_out_date": datetime.now() - timedelta(days=5),
-                "expected_return_date": datetime.now() + timedelta(days=10),
-                "rental_rate_per_day": 450.0
-            },
-            {
-                "equipment_id": "EQX1003",
-                "site_id": "S002",
-                "operator_id": "OP103",
-                "check_out_date": datetime.now() - timedelta(days=15),
-                "expected_return_date": datetime.now() - timedelta(days=2),  # Overdue
-                "rental_rate_per_day": 520.0
-            }
-        ]
-        
-        for rental_info in active_rentals:
-            equipment = crud.get_equipment_by_equipment_id(db, rental_info["equipment_id"])
-            site = crud.get_site_by_site_id(db, rental_info["site_id"])
-            operator = crud.get_operator_by_operator_id(db, rental_info["operator_id"])
-            
-            if equipment and equipment.status == "available":
-                rental_create = schemas.RentalCreate(
-                    equipment_id=equipment.id,
-                    site_id=site.id,
-                    operator_id=operator.id,
-                    check_out_date=rental_info["check_out_date"],
-                    expected_return_date=rental_info["expected_return_date"],
-                    rental_rate_per_day=rental_info["rental_rate_per_day"]
-                )
-                
-                rental = crud.create_rental(db, rental_create)
-                print(f"Created active rental for equipment: {rental_info['equipment_id']}")
-        
-        print("Database seeded successfully!")
+        print("\n🎉 Database seeding completed successfully!")
+        print(f"   • Sites: {len(sites)}")
+        print(f"   • Operators: {len(operators)}")
+        print(f"   • Equipment: {len(equipment)}")
+        print(f"   • Rentals: {len(rentals)}")
+        print(f"   • Usage Logs: {len(usage_logs)}")
         
     except Exception as e:
-        print(f"Error seeding database: {e}")
+        print(f"❌ Error seeding database: {e}")
         db.rollback()
+        raise
     finally:
         db.close()
 
 if __name__ == "__main__":
-    seed_data()
+    create_sample_data()

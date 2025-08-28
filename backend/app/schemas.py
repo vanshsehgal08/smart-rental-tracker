@@ -1,3 +1,5 @@
+# Smart Rental Tracking System - Backend App Package
+
 from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional, List
@@ -156,9 +158,10 @@ class AlertBase(BaseModel):
     rental_id: Optional[int] = None
     equipment_id: Optional[int] = None
     alert_type: str
-    severity: str = "medium"
+    severity: str
     title: str
-    description: Optional[str] = None
+    description: str
+    resolved: bool = False
 
 
 class AlertCreate(AlertBase):
@@ -167,10 +170,77 @@ class AlertCreate(AlertBase):
 
 class Alert(AlertBase):
     id: int
-    is_resolved: bool
-    resolved_at: Optional[datetime] = None
-    resolved_by: Optional[str] = None
     created_at: datetime
+    resolved_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+# Demand Forecast Schemas
+class DemandForecastBase(BaseModel):
+    site_id: str
+    equipment_type: str
+    forecast_date: datetime
+    predicted_demand: int
+    confidence_score: float
+    actual_demand: Optional[int] = None
+
+
+class DemandForecastCreate(DemandForecastBase):
+    pass
+
+
+class DemandForecast(DemandForecastBase):
+    id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# Equipment with Status Schema (for detailed views)
+class EquipmentWithStatus(BaseModel):
+    id: int
+    equipment_id: str
+    type: str
+    model: Optional[str] = None
+    manufacturer: Optional[str] = None
+    year: Optional[int] = None
+    serial_number: Optional[str] = None
+    status: str
+    created_at: datetime
+    updated_at: datetime
+    
+    # Current rental info
+    current_rental: Optional[Rental] = None
+    current_site: Optional[Site] = None
+    current_operator: Optional[Operator] = None
+
+    class Config:
+        from_attributes = True
+
+
+# Rental with Details Schema
+class RentalWithDetails(BaseModel):
+    id: int
+    equipment_id: int
+    site_id: Optional[int] = None
+    operator_id: Optional[int] = None
+    check_out_date: datetime
+    check_in_date: Optional[datetime] = None
+    expected_return_date: Optional[datetime] = None
+    rental_rate_per_day: Optional[float] = None
+    total_cost: Optional[float] = None
+    status: str
+    notes: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    
+    # Related objects
+    equipment: Equipment
+    site: Optional[Site] = None
+    operator: Optional[Operator] = None
 
     class Config:
         from_attributes = True
@@ -196,33 +266,3 @@ class DashboardSummary(BaseModel):
     equipment_summary: EquipmentSummary
     rental_summary: RentalSummary
     recent_alerts: List[Alert]
-
-
-# Equipment with current rental status
-class EquipmentWithStatus(Equipment):
-    current_rental: Optional[Rental] = None
-    total_runtime_hours: float = 0.0
-    last_maintenance_date: Optional[datetime] = None
-    utilization_rate: float = 0.0
-
-
-# Demand Forecast Schemas
-class DemandForecastBase(BaseModel):
-    site_id: int
-    equipment_type: str
-    forecast_date: datetime
-    predicted_demand: int
-    confidence_score: Optional[float] = None
-
-
-class DemandForecastCreate(DemandForecastBase):
-    pass
-
-
-class DemandForecast(DemandForecastBase):
-    id: int
-    actual_demand: Optional[int] = None
-    created_at: datetime
-
-    class Config:
-        from_attributes = True

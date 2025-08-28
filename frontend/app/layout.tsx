@@ -1,16 +1,13 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
-import Navigation from '@/components/Navigation'
+import { Toaster } from 'react-hot-toast'
 
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Smart Rental Tracker',
-  description: 'Comprehensive construction and mining equipment rental management system',
-  keywords: 'equipment rental, construction, mining, fleet management, tracking',
-  authors: [{ name: 'Smart Rental Tracker Team' }],
-  viewport: 'width=device-width, initial-scale=1',
+  title: 'Smart Rental Tracking System',
+  description: 'AI-powered equipment rental tracking with demand forecasting and anomaly detection',
 }
 
 export default function RootLayout({
@@ -21,12 +18,8 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <div className="min-h-screen bg-gray-50">
-          <Navigation />
-          <main className="pt-16">
-            {children}
-          </main>
-        </div>
+        {children}
+        <Toaster position="top-right" />
       </body>
     </html>
   )
