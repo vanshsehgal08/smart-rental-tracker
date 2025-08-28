@@ -1,0 +1,504 @@
+=== Smart Rental Tracker - ML Training Report ===
+Generated: 2025-08-28 14:41:05
+Data source: ../database/data.csv
+
+Overall Status: success
+Total Training Time: 59.57 seconds
+Total Models Trained: 123
+
+=== Demand Forecasting Results ===
+Status: success
+Models Trained: 120
+Model File: demand_forecasting_models.pkl
+
+Model Performance:
+  SITE011_Excavator:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE006_Bulldozer:
+    R² Score: -0.260
+    MAE: 0.21
+    RMSE: 0.45
+  SITE006_Dumper:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE006_Loader:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE006_Excavator:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE016_Grader:
+    R² Score: 0.000
+    MAE: 0.09
+    RMSE: 0.09
+  SITE016_Crane:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE016_Bulldozer:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE016_Dumper:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE016_Loader:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE016_Excavator:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE017_Grader:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE017_Crane:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE006_Crane:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE017_Bulldozer:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE017_Loader:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE017_Excavator:
+    R² Score: 0.000
+    MAE: 0.02
+    RMSE: 0.02
+  SITE019_Grader:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE019_Crane:
+    R² Score: 0.501
+    MAE: 0.20
+    RMSE: 0.34
+  SITE019_Bulldozer:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE019_Dumper:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE019_Loader:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE019_Excavator:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE010_Grader:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE010_Crane:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE010_Bulldozer:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE010_Dumper:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE017_Dumper:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE002_Excavator:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE002_Loader:
+    R² Score: 0.276
+    MAE: 0.29
+    RMSE: 0.42
+  SITE002_Dumper:
+    R² Score: -0.500
+    MAE: 0.33
+    RMSE: 0.58
+  SITE020_Grader:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE020_Crane:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE020_Bulldozer:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE020_Dumper:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE020_Loader:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE020_Excavator:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE001_Grader:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE001_Crane:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE001_Bulldozer:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE001_Dumper:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE001_Loader:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE001_Excavator:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE009_Grader:
+    R² Score: 0.137
+    MAE: 0.34
+    RMSE: 0.40
+  SITE009_Crane:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE009_Bulldozer:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE009_Dumper:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE009_Loader:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE009_Excavator:
+    R² Score: -0.050
+    MAE: 0.05
+    RMSE: 0.22
+  SITE014_Grader:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE014_Crane:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE014_Bulldozer:
+    R² Score: -4.754
+    MAE: 0.40
+    RMSE: 0.42
+  SITE014_Dumper:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE014_Loader:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE014_Excavator:
+    R² Score: 0.551
+    MAE: 0.27
+    RMSE: 0.42
+  SITE002_Grader:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE002_Crane:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE002_Bulldozer:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE010_Loader:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE010_Excavator:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE006_Grader:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE007_Crane:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE003_Bulldozer:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE003_Dumper:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE003_Loader:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE003_Excavator:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE008_Grader:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE008_Crane:
+    R² Score: -0.145
+    MAE: 0.13
+    RMSE: 0.36
+  SITE008_Bulldozer:
+    R² Score: -4.432
+    MAE: 0.43
+    RMSE: 0.45
+  SITE008_Dumper:
+    R² Score: 0.205
+    MAE: 0.30
+    RMSE: 0.44
+  SITE008_Loader:
+    R² Score: 0.479
+    MAE: 0.17
+    RMSE: 0.32
+  SITE008_Excavator:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE013_Grader:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE013_Bulldozer:
+    R² Score: 0.731
+    MAE: 0.14
+    RMSE: 0.25
+  SITE013_Dumper:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE013_Loader:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE013_Excavator:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE018_Grader:
+    R² Score: 0.374
+    MAE: 0.21
+    RMSE: 0.37
+  SITE018_Crane:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE018_Bulldozer:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE018_Dumper:
+    R² Score: 0.000
+    MAE: 0.46
+    RMSE: 0.46
+  SITE018_Loader:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE018_Excavator:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE011_Grader:
+    R² Score: -0.518
+    MAE: 0.34
+    RMSE: 0.58
+  SITE011_Crane:
+    R² Score: 0.000
+    MAE: 0.12
+    RMSE: 0.13
+  SITE011_Bulldozer:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE011_Dumper:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE011_Loader:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE007_Grader:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE003_Crane:
+    R² Score: -0.703
+    MAE: 0.41
+    RMSE: 0.64
+  SITE003_Grader:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE013_Crane:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE007_Bulldozer:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE012_Excavator:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE007_Dumper:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE007_Loader:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE007_Excavator:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE004_Grader:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE004_Crane:
+    R² Score: 0.500
+    MAE: 0.14
+    RMSE: 0.29
+  SITE004_Bulldozer:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE004_Dumper:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE004_Excavator:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE015_Grader:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE015_Crane:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE015_Bulldozer:
+    R² Score: -0.575
+    MAE: 0.37
+    RMSE: 0.60
+  SITE015_Dumper:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE004_Loader:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE015_Excavator:
+    R² Score: -0.326
+    MAE: 0.25
+    RMSE: 0.50
+  SITE012_Loader:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE015_Loader:
+    R² Score: 0.495
+    MAE: 0.08
+    RMSE: 0.22
+  SITE012_Bulldozer:
+    R² Score: -0.033
+    MAE: 0.35
+    RMSE: 0.40
+  SITE012_Crane:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE012_Grader:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE005_Excavator:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE012_Dumper:
+    R² Score: 0.391
+    MAE: 0.24
+    RMSE: 0.38
+  SITE005_Dumper:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE005_Bulldozer:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE005_Crane:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE005_Grader:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+  SITE005_Loader:
+    R² Score: 1.000
+    MAE: 0.00
+    RMSE: 0.00
+
+=== Anomaly Detection Results ===
+Status: success
+Models Trained: 3
+Model File: anomaly_detection_models.pkl
+Total Records Analyzed: 146
+Statistical Anomalies: 14
+ML Consensus Anomalies: 17
+Anomaly Rate: 11.64%
+
