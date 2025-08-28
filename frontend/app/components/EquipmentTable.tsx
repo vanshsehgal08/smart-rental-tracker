@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import { equipmentApi } from '../lib/api'
 import AddEquipmentModal from './AddEquipmentModal'
+import ViewEquipmentModal from './ViewEquipmentModal'
+import EditEquipmentModal from './EditEquipmentModal'
 
 interface Equipment {
   id: number
@@ -30,6 +32,9 @@ export default function EquipmentTable() {
   const [filterType, setFilterType] = useState('all')
   const [filterStatus, setFilterStatus] = useState('all')
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [selectedEquipmentId, setSelectedEquipmentId] = useState<number | null>(null)
 
   const fetchEquipment = async () => {
     try {
@@ -50,15 +55,40 @@ export default function EquipmentTable() {
     fetchEquipment() // Refresh the equipment list
   }
 
+  const handleViewEquipment = (equipmentId: number) => {
+    setSelectedEquipmentId(equipmentId)
+    setIsViewModalOpen(true)
+  }
+
+  const handleEditEquipment = (equipmentId: number) => {
+    setSelectedEquipmentId(equipmentId)
+    setIsEditModalOpen(true)
+  }
+
+  const handleEquipmentUpdated = () => {
+    fetchEquipment() // Refresh the equipment list
+    setIsEditModalOpen(false)
+    setSelectedEquipmentId(null)
+  }
+
+  const closeViewModal = () => {
+    setIsViewModalOpen(false)
+    setSelectedEquipmentId(null)
+  }
+
+  const closeEditModal = () => {
+    setIsEditModalOpen(false)
+    setSelectedEquipmentId(null)
+  }
+
   // Filter equipment based on search and filters
   const filteredEquipment = equipment.filter(item => {
     const matchesSearch = item.equipment_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         item.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (item.model && item.model.toLowerCase().includes(searchTerm.toLowerCase()))
-    
+      item.type.toLowerCase().includes(searchTerm.toLowerCase())
+
     const matchesType = filterType === 'all' || item.type === filterType
     const matchesStatus = filterStatus === 'all' || item.status === filterStatus
-    
+
     return matchesSearch && matchesType && matchesStatus
   })
 
@@ -92,7 +122,7 @@ export default function EquipmentTable() {
         <div className="flex-1">
           <input
             type="text"
-            placeholder="Search equipment ID, type, or model..."
+            placeholder="Search equipment ID or type..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="input-field"
@@ -130,7 +160,7 @@ export default function EquipmentTable() {
           <p className="text-sm text-gray-600">
             Showing {filteredEquipment.length} of {equipment.length} equipment items
           </p>
-          <button 
+          <button
             onClick={() => setIsModalOpen(true)}
             className="btn-primary"
           >
@@ -157,9 +187,6 @@ export default function EquipmentTable() {
                 Site ID
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Model
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Engine Hrs/Day
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -183,9 +210,6 @@ export default function EquipmentTable() {
                   <div className="text-sm text-gray-500">{item.site_id || 'N/A'}</div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-500">{item.model || 'N/A'}</div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm text-gray-500">{item.engine_hours_per_day || 0}</div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
@@ -195,10 +219,16 @@ export default function EquipmentTable() {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                   <div className="flex space-x-2">
-                    <button className="text-primary-600 hover:text-primary-900">
+                    <button
+                      onClick={() => handleEditEquipment(item.id)}
+                      className="text-blue-600 hover:text-blue-900 font-medium"
+                    >
                       Edit
                     </button>
-                    <button className="text-gray-600 hover:text-gray-900">
+                    <button
+                      onClick={() => handleViewEquipment(item.id)}
+                      className="text-gray-600 hover:text-gray-900 font-medium"
+                    >
                       View
                     </button>
                   </div>
@@ -245,12 +275,27 @@ export default function EquipmentTable() {
           </div>
         </div>
       )}
-      
+
       {/* Add Equipment Modal */}
       <AddEquipmentModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSuccess={handleEquipmentAdded}
+      />
+
+      {/* View Equipment Modal */}
+      <ViewEquipmentModal
+        isOpen={isViewModalOpen}
+        onClose={closeViewModal}
+        equipmentId={selectedEquipmentId}
+      />
+
+      {/* Edit Equipment Modal */}
+      <EditEquipmentModal
+        isOpen={isEditModalOpen}
+        onClose={closeEditModal}
+        equipmentId={selectedEquipmentId}
+        onSuccess={handleEquipmentUpdated}
       />
     </div>
   )

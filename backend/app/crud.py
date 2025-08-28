@@ -2,8 +2,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, func
 from datetime import datetime, timedelta
 from typing import List, Optional
-from app import models
-from app import schemas
+import models
+import schemas
 
 
 # Equipment CRUD
