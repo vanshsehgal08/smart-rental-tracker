@@ -13,8 +13,8 @@ from email.mime.base import MIMEBase
 from email import encoders
 import os
 from dotenv import load_dotenv
-from app.database import SessionLocal
-from app.models import Equipment
+from database import SessionLocal
+from models import Equipment
 from typing import List, Dict, Any
 import logging
 

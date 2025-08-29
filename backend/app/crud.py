@@ -2,8 +2,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, func
 from datetime import datetime, timedelta
 from typing import List, Optional
-from app import models
-from app import schemas
+import models
+import schemas
 
 
 # Equipment CRUD
@@ -15,8 +15,11 @@ def get_equipment_by_equipment_id(db: Session, equipment_id: str):
     return db.query(models.Equipment).filter(models.Equipment.equipment_id == equipment_id).first()
 
 
-def get_equipment_list(db: Session, skip: int = 0, limit: int = 100):
-    return db.query(models.Equipment).offset(skip).limit(limit).all()
+def get_equipment_list(db: Session, skip: int = 0, limit: Optional[int] = None):
+    query = db.query(models.Equipment).offset(skip)
+    if limit:
+        query = query.limit(limit)
+    return query.all()
 
 
 def create_equipment(db: Session, equipment: schemas.EquipmentCreate):

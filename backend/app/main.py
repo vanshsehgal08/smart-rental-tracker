@@ -7,11 +7,11 @@ import schedule
 import time
 import logging
 import os
-from app import models
-from app import schemas
-from app import crud
-from app.database import engine, get_db
-from app.routers import ml_integration
+import models
+import schemas
+import crud
+from database import engine, get_db
+from routers import ml_integration
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -27,7 +27,7 @@ scheduler_running = False
 def run_scheduled_notifications():
     """Run the notification service"""
     try:
-        from app.notification_service import NotificationService
+        from notification_service import NotificationService
         logger.info("Running scheduled notification check...")
         
         notification_service = NotificationService()
@@ -342,8 +342,8 @@ def create_equipment(equipment: schemas.EquipmentCreate, db: Session = Depends(g
 
 
 @app.get("/equipment/")
-def read_equipment(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    """Get equipment from database"""
+def read_equipment(skip: int = 0, limit: Optional[int] = None, db: Session = Depends(get_db)):
+    """Get equipment from database - returns all equipment if no limit specified"""
     try:
         equipment = crud.get_equipment_list(db, skip=skip, limit=limit)
         return equipment
