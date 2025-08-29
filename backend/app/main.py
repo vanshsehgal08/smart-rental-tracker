@@ -342,8 +342,8 @@ def create_equipment(equipment: schemas.EquipmentCreate, db: Session = Depends(g
 
 
 @app.get("/equipment/")
-def read_equipment(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    """Get equipment from database"""
+def read_equipment(skip: int = 0, limit: Optional[int] = None, db: Session = Depends(get_db)):
+    """Get equipment from database - returns all equipment if no limit specified"""
     try:
         equipment = crud.get_equipment_list(db, skip=skip, limit=limit)
         return equipment

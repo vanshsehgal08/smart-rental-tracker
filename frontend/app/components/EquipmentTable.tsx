@@ -36,7 +36,7 @@ export default function EquipmentTable() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [selectedEquipmentId, setSelectedEquipmentId] = useState<number | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
-  const [itemsPerPage] = useState(10) // You can make this configurable
+  const [itemsPerPage, setItemsPerPage] = useState(10) // Now configurable
 
   const fetchEquipment = async () => {
     try {
@@ -160,6 +160,20 @@ export default function EquipmentTable() {
           />
         </div>
         <div className="flex gap-2">
+          <select
+            value={itemsPerPage}
+            onChange={(e) => {
+              setItemsPerPage(Number(e.target.value))
+              setCurrentPage(1) // Reset to first page
+            }}
+            className="input-field max-w-xs"
+          >
+            <option value={10}>10 per page</option>
+            <option value={25}>25 per page</option>
+            <option value={50}>50 per page</option>
+            <option value={100}>100 per page</option>
+            <option value={filteredEquipment.length}>Show All ({filteredEquipment.length})</option>
+          </select>
           <select
             value={filterType}
             onChange={(e) => setFilterType(e.target.value)}
