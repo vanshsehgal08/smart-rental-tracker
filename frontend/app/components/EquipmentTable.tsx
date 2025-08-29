@@ -60,7 +60,12 @@ export default function EquipmentTable() {
     setIsViewModalOpen(true)
   }
 
-  const handleEditEquipment = (equipmentId: number) => {
+  const handleEditEquipment = (equipmentId: number, equipment: Equipment) => {
+    // Only allow editing if equipment status is 'available'
+    if (equipment.status !== 'available') {
+      alert('Cannot edit equipment that is currently rented or not available')
+      return
+    }
     setSelectedEquipmentId(equipmentId)
     setIsEditModalOpen(true)
   }
@@ -220,8 +225,17 @@ export default function EquipmentTable() {
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                   <div className="flex space-x-2">
                     <button
-                      onClick={() => handleEditEquipment(item.id)}
-                      className="text-blue-600 hover:text-blue-900 font-medium"
+                      onClick={() => handleEditEquipment(item.id, item)}
+                      disabled={item.status !== 'available'}
+                      className={`font-medium ${item.status === 'available'
+                          ? 'text-blue-600 hover:text-blue-900 cursor-pointer'
+                          : 'text-gray-400 cursor-not-allowed opacity-50'
+                        }`}
+                      title={
+                        item.status !== 'available'
+                          ? 'Cannot edit equipment that is not available'
+                          : 'Edit equipment'
+                      }
                     >
                       Edit
                     </button>

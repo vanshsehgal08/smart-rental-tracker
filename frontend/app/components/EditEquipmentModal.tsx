@@ -108,12 +108,14 @@ export default function EditEquipmentModal({ isOpen, onClose, equipmentId, onSuc
         setError(null)
 
         try {
-            // Prepare the update data - only include editable fields
+            // Prepare the update data - include site_id and check_out_date as editable fields
             const updateData: any = {}
 
-            // Only include status and check_in_date as they are the only editable fields
+            // Include all editable fields
             if (formData.status) updateData.status = formData.status
             if (formData.check_in_date) updateData.check_in_date = formData.check_in_date
+            if (formData.site_id) updateData.site_id = formData.site_id
+            if (formData.check_out_date) updateData.check_out_date = formData.check_out_date
 
             const response = await fetch(`http://localhost:8000/equipment/${equipmentId}`, {
                 method: 'PUT',
@@ -180,7 +182,7 @@ export default function EditEquipmentModal({ isOpen, onClose, equipmentId, onSuc
                                 <div className="sm:flex sm:items-start">
                                     <div className="mt-3 text-center sm:ml-4 sm:mt-0 sm:text-left w-full">
                                         <Dialog.Title as="h3" className="text-lg font-semibold leading-6 text-gray-900 mb-4">
-                                            Edit Equipment Status & Check-in Date
+                                            Edit Equipment Details
                                         </Dialog.Title>
 
                                         {loading && (
@@ -236,27 +238,29 @@ export default function EditEquipmentModal({ isOpen, onClose, equipmentId, onSuc
                                                         </select>
                                                     </div>
 
-                                                    {/* Site ID - Read only */}
+                                                    {/* Site ID - Now Editable */}
                                                     <div>
                                                         <label className="block text-sm font-medium text-gray-700">Site ID</label>
                                                         <input
                                                             type="text"
+                                                            name="site_id"
                                                             value={formData.site_id}
-                                                            disabled
-                                                            className="mt-1 block w-full rounded-md border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-500"
+                                                            onChange={handleInputChange}
+                                                            className="mt-1 block w-full rounded-md border-blue-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500 bg-white"
                                                         />
                                                     </div>
                                                 </div>
 
                                                 <div className="grid grid-cols-2 gap-4">
-                                                    {/* Check Out Date - Read only */}
+                                                    {/* Check Out Date - Now Editable */}
                                                     <div>
                                                         <label className="block text-sm font-medium text-gray-700">Check Out Date</label>
                                                         <input
                                                             type="date"
+                                                            name="check_out_date"
                                                             value={formData.check_out_date}
-                                                            disabled
-                                                            className="mt-1 block w-full rounded-md border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-500"
+                                                            onChange={handleInputChange}
+                                                            className="mt-1 block w-full rounded-md border-blue-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500 bg-white"
                                                         />
                                                     </div>
 
