@@ -6,6 +6,7 @@ import EquipmentTable from './components/EquipmentTable'
 import AnomalyAlerts from './components/AnomalyAlerts'
 import DemandForecast from './components/DemandForecast'
 import EquipmentStats from './components/EquipmentStats'
+import RentalDashboard from './components/RentalDashboard'
 
 export default function Dashboard() {
   const [dashboardData, setDashboardData] = useState<any>(null)
@@ -62,6 +63,20 @@ export default function Dashboard() {
       }
     }
   }, [autoRefresh, backendStatus, loading])
+
+  // Listen for refresh events from child components
+  useEffect(() => {
+    const handleRefreshDashboard = () => {
+      console.log('Refreshing dashboard data...')
+      loadDashboardData()
+    }
+
+    window.addEventListener('refreshDashboard', handleRefreshDashboard)
+    
+    return () => {
+      window.removeEventListener('refreshDashboard', handleRefreshDashboard)
+    }
+  }, [])
 
   const checkBackendStatus = async () => {
     try {
@@ -125,6 +140,7 @@ export default function Dashboard() {
 
   const tabs = [
     { id: 'overview', name: 'Overview', icon: '📊' },
+    { id: 'rentals', name: 'Rental Management', icon: '⏰' },
     { id: 'equipment', name: 'Equipment', icon: '⚙️' },
     { id: 'anomalies', name: 'Anomalies', icon: '⚠️' },
     { id: 'forecasting', name: 'Demand Forecast', icon: '📈' },
@@ -317,10 +333,16 @@ export default function Dashboard() {
             {/* Demand Forecast Preview */}
             <div className="card">
               <h3 className="text-lg font-medium text-gray-900 mb-4">
-                Demand Forecast (Next 7 Days)
+                Demand Forecast (Next 30 Days)
               </h3>
-              <DemandForecast daysAhead={7} />
+              <DemandForecast daysAhead={30} />
             </div>
+          </div>
+        )}
+
+        {activeTab === 'rentals' && (
+          <div className="space-y-6">
+            <RentalDashboard dashboardData={dashboardData} />
           </div>
         )}
 

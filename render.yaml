@@ -1,0 +1,49 @@
+services:
+  # Backend API Service
+  - type: web
+    name: smart-rental-tracker-api
+    env: python
+    plan: free
+    buildCommand: |
+      cd backend
+      pip install -r requirements.txt
+    startCommand: |
+      cd backend
+      uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.9.16
+      - key: DATABASE_URL
+        value: sqlite:///./rental.db
+      - key: HOST
+        value: 0.0.0.0
+      - key: DEBUG
+        value: false
+      - key: LOG_LEVEL
+        value: INFO
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: 30
+      - key: ALLOWED_ORIGINS
+        value: https://smart-rental-tracker-frontend.onrender.com
+      - key: ENABLE_SCHEDULER
+        value: true
+      - key: SCHEDULER_INTERVAL_MINUTES
+        value: 60
+
+  # Frontend Web Service
+  - type: web
+    name: smart-rental-tracker-frontend
+    env: static
+    plan: free
+    buildCommand: |
+      cd frontend
+      npm install
+      npm run build
+    staticPublishPath: frontend/.next
+    envVars:
+      - key: NODE_VERSION
+        value: 18.17.0
+      - key: NEXT_PUBLIC_API_URL
+        value: https://smart-rental-tracker-api.onrender.com
