@@ -3,8 +3,8 @@ services:
   - type: web
     name: smart-rental-tracker-backend
     env: python
-    plan: free
-    branch: aditya
+    plan: starter
+    branch: main
     buildCommand: |
       cd backend
       pip install -r requirements.txt
@@ -22,11 +22,10 @@ services:
     autoDeploy: true
 
   # Frontend Service
-  - type: web
+  - type: static
     name: smart-rental-tracker-frontend
-    env: static
-    plan: free
-    branch: aditya
+    plan: starter
+    branch: main
     buildCommand: |
       cd frontend
       npm install
