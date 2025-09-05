@@ -1,38 +1,61 @@
 #!/usr/bin/env python3
 """
-Production startup script for Smart Rental Tracker
-This script is used by Render to start the backend service
+Production startup script for Smart Rental Tracker Backend
+This script handles database initialization and starts the FastAPI server
 """
 
 import os
-import uvicorn
-from dotenv import load_dotenv
+import sys
+import logging
+from pathlib import Path
 
-# Load environment variables
-load_dotenv('config.env.production', override=True)
+# Add the app directory to Python path
+app_dir = Path(__file__).parent / "app"
+sys.path.insert(0, str(app_dir))
 
-if __name__ == "__main__":
-    # Initialize production database first
-    print("🚀 Initializing production environment...")
-    
+from app.database import engine
+from app import models
+from app.populate_database import populate_database
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+def initialize_database():
+    """Initialize database tables and populate with sample data"""
     try:
-        # Import and run database initialization
-        from init_production_db import init_production_database
-        init_production_database()
+        logger.info("Creating database tables...")
+        models.Base.metadata.create_all(bind=engine)
+        logger.info("Database tables created successfully")
+        
+        logger.info("Populating database with sample data...")
+        populate_database()
+        logger.info("Database populated successfully")
+        
     except Exception as e:
-        print(f"⚠️ Database initialization warning: {e}")
-        print("Continuing with startup...")
+        logger.error(f"Error initializing database: {e}")
+        raise
+
+def main():
+    """Main startup function"""
+    logger.info("🚀 Starting Smart Rental Tracker Backend...")
     
-    # Get port from environment (Render sets this)
+    # Initialize database
+    initialize_database()
+    
+    # Start the FastAPI server
+    import uvicorn
+    
     port = int(os.getenv("PORT", 8000))
+    host = os.getenv("HOST", "0.0.0.0")
     
-    print(f"🌐 Starting FastAPI server on port {port}...")
-    
-    # Start the FastAPI application
+    logger.info(f"Starting server on {host}:{port}")
     uvicorn.run(
         "app.main:app",
-        host="0.0.0.0",
+        host=host,
         port=port,
-        reload=False,  # Disable reload in production
         log_level="info"
     )
+
+if __name__ == "__main__":
+    main()

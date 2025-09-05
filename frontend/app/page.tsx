@@ -67,7 +67,6 @@ export default function Dashboard() {
   // Listen for refresh events from child components
   useEffect(() => {
     const handleRefreshDashboard = () => {
-      console.log('Refreshing dashboard data...')
       loadDashboardData()
     }
 
@@ -97,11 +96,20 @@ export default function Dashboard() {
 
   const loadDashboardData = async () => {
     try {
-      // Always try to fetch real data from backend first
-      const response = await fetch('http://localhost:8000/dashboard')
-      if (response.ok) {
-        const data = await response.json()
-        setDashboardData(data)
+      // Fetch dashboard data and equipment data in parallel
+      const [dashboardResponse, equipmentResponse] = await Promise.all([
+        fetch('http://localhost:8000/dashboard'),
+        fetch('http://localhost:8000/equipment/')
+      ])
+      
+      if (dashboardResponse.ok && equipmentResponse.ok) {
+        const dashboardData = await dashboardResponse.json()
+        const equipmentData = await equipmentResponse.json()
+        
+        // Add equipment data to dashboard data
+        dashboardData.equipment_list = equipmentData
+        
+        setDashboardData(dashboardData)
         setLastUpdated(new Date())
         setBackendStatus('connected')
       } else {

@@ -191,6 +191,7 @@ export default function EquipmentTable() {
           <p className="text-sm text-gray-600">
             Showing {filteredEquipment.length} of {equipment.length} equipment items
           </p>
+          {/* HIDDEN: Add New Equipment Button
           <button
             onClick={() => setIsModalOpen(true)}
             className="btn-primary"
@@ -200,6 +201,7 @@ export default function EquipmentTable() {
             </svg>
             Add New Equipment
           </button>
+          */}
         </div>
       </div>
 
@@ -260,7 +262,7 @@ export default function EquipmentTable() {
                       title={
                         item.status !== 'available'
                           ? 'Cannot edit equipment that is not available'
-                          : 'Edit equipment'
+                          : 'Edit equipment details and specifications'
                       }
                     >
                       Edit
@@ -268,6 +270,7 @@ export default function EquipmentTable() {
                     <button
                       onClick={() => handleViewEquipment(item.id)}
                       className="text-gray-600 hover:text-gray-900 font-medium"
+                      title="View detailed equipment information and rental history"
                     >
                       View
                     </button>

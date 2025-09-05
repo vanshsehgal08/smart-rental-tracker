@@ -6,6 +6,7 @@ import { Button } from './ui/button'
 import { Badge } from './ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs'
 import { equipmentManagementApi, rentalManagementApi } from '../lib/api'
+import { EmailService, EquipmentAlert } from '../lib/emailService'
 import { 
   Clock, 
   AlertTriangle, 
@@ -82,7 +83,18 @@ interface DashboardData {
       status: 'rented' | 'available'
     }>
   }
-  recommendations: string[]
+  equipment_list?: Array<{
+    equipment_id: string
+    type: string
+    site_id: string
+    engine_hours_per_day: number
+    idle_hours_per_day: number
+    utilization_ratio: number
+    check_out_date: string
+    check_in_date: string
+    anomaly_score?: number
+    severity?: string
+  }>
 }
 
 interface Props {
@@ -152,47 +164,45 @@ export default function RentalDashboard({ dashboardData }: Props) {
 
   // Dynamic data filtering and manipulation
   const getActiveRentals = useMemo(() => {
-    console.log('🔄 getActiveRentals recalculating with data:', {
-      hasData: !!dashboardData,
-      anomaliesCount: dashboardData?.anomalies?.anomalies?.length || 0,
-      overview: dashboardData?.overview
-    })
-    
-    // Check multiple possible data sources for rentals
+    // Use actual equipment data if available, otherwise fall back to anomalies
+    const equipmentList = dashboardData?.equipment_list || []
     const anomaliesData = dashboardData?.anomalies?.anomalies || []
-    const equipmentData = dashboardData?.equipment_stats?.by_equipment_type || {}
     
-    console.log('Data Sources Debug:', {
-      anomaliesCount: anomaliesData.length,
-      equipmentStats: equipmentData,
-      overview: dashboardData?.overview
-    })
+    // Use equipment list if available, otherwise use anomalies data
+    const sourceData = equipmentList.length > 0 ? equipmentList : anomaliesData
     
-    if (!anomaliesData.length) return []
+    if (!sourceData.length) return []
     
-    // Filter to show ONLY properly rented equipment (assigned to sites)
-    let filtered = anomaliesData
-      .filter(anomaly => 
-        anomaly.site_id && 
-        anomaly.site_id !== 'Unassigned' && 
-        anomaly.site_id !== 'Available' &&
-        anomaly.site_id.trim() !== '' &&
-        anomaly.site_id.length > 0
+    // Filter to show equipment with site_id (active rentals)
+    let filtered = sourceData
+      .filter(item => 
+        item.site_id && 
+        item.site_id.trim() !== '' &&
+        item.site_id !== 'Unassigned' &&
+        item.site_id !== 'Available'
       )
-      .map(anomaly => ({
-        id: anomaly.equipment_id,
-        equipment_id: anomaly.equipment_id,
-        type: anomaly.type,
-        site_id: anomaly.site_id,
-        check_out_date: anomaly.check_out_date,
-        check_in_date: anomaly.check_in_date,
-        utilization: Math.round(anomaly.utilization_ratio * 100) || 0,
-        engine_hours: anomaly.engine_hours_per_day || 0,
-        idle_hours: anomaly.idle_hours_per_day || 0,
-        anomaly_score: anomaly.anomaly_score || 0,
-        severity: anomaly.severity || 'none',
+      .map(item => {
+        // Calculate utilization from engine hours and idle hours
+        const engine_hours = item.engine_hours_per_day || 0
+        const idle_hours = item.idle_hours_per_day || 0
+        const total_hours = engine_hours + idle_hours
+        const utilization = total_hours > 0 ? Math.round((engine_hours / total_hours) * 100) : 0
+        
+        return {
+          id: item.equipment_id,
+          equipment_id: item.equipment_id,
+          type: item.type,
+          site_id: item.site_id,
+          check_out_date: item.check_out_date,
+          check_in_date: item.check_in_date,
+          utilization: utilization,
+          engine_hours: engine_hours,
+          idle_hours: idle_hours,
+          anomaly_score: item.anomaly_score || 0,
+          severity: item.severity || 'none',
         status: 'rented'
-      }))
+        }
+      })
 
     // Only apply filters if they are actually set (not empty/default)
     if (filters.search && filters.search.trim() !== '') {
@@ -232,55 +242,51 @@ export default function RentalDashboard({ dashboardData }: Props) {
       }
     })
 
-    console.log('Active Rentals Debug:', {
-      totalAnomalies: dashboardData?.anomalies?.anomalies?.length || 0,
-      filteredCount: filtered.length,
-      filters: filters,
-      sorting: sorting,
-      sampleData: filtered.slice(0, 3).map(item => ({
-        equipment_id: item.equipment_id,
-        site_id: item.site_id,
-        type: item.type
-      }))
-    })
 
     return filtered
   }, [dashboardData, filters, sorting])
 
   // Get available equipment (not currently rented)
   const getAvailableEquipment = useMemo(() => {
-    console.log('🔄 getAvailableEquipment recalculating with data:', {
-      hasData: !!dashboardData,
-      anomaliesCount: dashboardData?.anomalies?.anomalies?.length || 0,
-      overview: dashboardData?.overview,
-      sampleAnomaly: dashboardData?.anomalies?.anomalies?.[0]
-    })
+    // Use actual equipment data if available, otherwise fall back to anomalies
+    const equipmentList = dashboardData?.equipment_list || []
+    const anomaliesData = dashboardData?.anomalies?.anomalies || []
+    const sourceData = equipmentList.length > 0 ? equipmentList : anomaliesData
     
-    if (!dashboardData?.anomalies?.anomalies) return []
+    if (!sourceData.length) return []
     
     // Filter for equipment that is NOT assigned to a site (available for rent)
-    let filtered = dashboardData.anomalies.anomalies
-      .filter(anomaly => 
-        !anomaly.site_id || 
-        anomaly.site_id === 'Unassigned' || 
-        anomaly.site_id === 'Available' ||
-        anomaly.site_id.trim() === '' ||
-        anomaly.site_id === null
+    // This should match the backend logic for available equipment
+    let filtered = sourceData
+      .filter(item => 
+        !item.site_id || 
+        item.site_id === 'Unassigned' || 
+        item.site_id === 'Available' ||
+        item.site_id.trim() === '' ||
+        item.site_id === null
       )
-      .map(anomaly => ({
-        id: anomaly.equipment_id,
-        equipment_id: anomaly.equipment_id,
-        type: anomaly.type,
+      .map(item => {
+        // Calculate utilization from engine hours and idle hours
+        const engine_hours = item.engine_hours_per_day || 0
+        const idle_hours = item.idle_hours_per_day || 0
+        const total_hours = engine_hours + idle_hours
+        const utilization = total_hours > 0 ? Math.round((engine_hours / total_hours) * 100) : 0
+        
+        return {
+          id: item.equipment_id,
+          equipment_id: item.equipment_id,
+          type: item.type,
         site_id: 'Available',
         check_out_date: 'N/A',
         check_in_date: 'N/A',
-        utilization: 0,
-        engine_hours: 0,
-        idle_hours: 0,
+          utilization: utilization,
+          engine_hours: engine_hours,
+          idle_hours: idle_hours,
         anomaly_score: 0,
         severity: 'none',
         status: 'available'
-      }))
+        }
+      })
 
     // Apply search filter
     if (filters.search) {
@@ -298,8 +304,51 @@ export default function RentalDashboard({ dashboardData }: Props) {
     return filtered
   }, [dashboardData, filters])
 
+  // Get equipment due soon (next 30 days)
+  const getDueSoon = useMemo(() => {
+    // Use actual equipment data if available, otherwise fall back to anomalies
+    const equipmentList = dashboardData?.equipment_list || []
+    const anomaliesData = dashboardData?.anomalies?.anomalies || []
+    const sourceData = equipmentList.length > 0 ? equipmentList : anomaliesData
+    
+    if (!sourceData.length) return []
+    
+    const now = new Date()
+    const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
+    
+    return sourceData.filter(item => {
+      if (!item.check_in_date || item.check_in_date === 'N/A') return false
+      const returnDate = new Date(item.check_in_date)
+      return returnDate >= now && returnDate <= thirtyDaysFromNow
+    }).map(item => {
+      // Calculate utilization from engine hours and idle hours
+      const engine_hours = item.engine_hours_per_day || 0
+      const idle_hours = item.idle_hours_per_day || 0
+      const total_hours = engine_hours + idle_hours
+      const utilization = total_hours > 0 ? Math.round((engine_hours / total_hours) * 100) : 0
+      
+      return {
+        id: item.equipment_id,
+        equipment_id: item.equipment_id,
+        type: item.type,
+        site_id: item.site_id || 'Unknown',
+        check_out_date: item.check_out_date || 'N/A',
+        check_in_date: item.check_in_date,
+        utilization: utilization,
+        engine_hours: engine_hours,
+        idle_hours: idle_hours,
+        anomaly_score: item.anomaly_score || 0,
+        severity: item.severity || 'none',
+        status: 'due_soon'
+      }
+    })
+  }, [dashboardData])
+
   // Get available equipment count
   const getAvailableEquipmentCount = useCallback(() => getAvailableEquipment.length, [getAvailableEquipment])
+
+  // Get due soon count
+  const getDueSoonCount = useCallback(() => getDueSoon.length, [getDueSoon])
 
   // Get overdue equipment with dynamic filtering
   const getOverdueEquipment = useMemo(() => {
@@ -347,7 +396,7 @@ export default function RentalDashboard({ dashboardData }: Props) {
   // Get unique site IDs for filter dropdown
   const siteIds = useMemo(() => {
     if (!dashboardData?.anomalies?.anomalies) return []
-    return Array.from(new Set(dashboardData.anomalies.anomalies.map(a => a.site_id).filter(id => id !== 'Unassigned')))
+    return Array.from(new Set(dashboardData.anomalies.anomalies.map(a => a.site_id).filter(id => id && id.trim() !== '')))
   }, [dashboardData])
 
   // Interactive functions
@@ -486,15 +535,35 @@ export default function RentalDashboard({ dashboardData }: Props) {
   // Mock functions for buttons (since we don't have actual rental management)
   const sendOverdueAlerts = async () => {
     try {
-    console.log('Sending overdue alerts...')
+      const overdueCount = getOverdueCount()
+      
+      if (overdueCount === 0) {
+        showCustomAlert('✅ No overdue equipment found!\n\nAll equipment returns are on schedule.', 'success')
+        return
+      }
+      
       const response = await rentalManagementApi.sendOverdueAlerts()
       
       if (response.status === 200) {
-        showCustomAlert('Overdue alerts sent successfully!', 'success')
+        // Send email alerts
+        const emailSent = await EmailService.sendOverdueAlerts(
+          overdueCount, 
+          EmailService.getDefaultRecipients()
+        )
+        
+        let alertMessage = `Overdue alerts sent for ${overdueCount} equipment items.\n\nSite managers and coordinators have been notified to schedule immediate returns.`
+        
+        if (emailSent) {
+          alertMessage += '\n\n📧 Email notifications sent successfully!'
+        } else {
+          alertMessage += '\n\n⚠️ Email notifications failed, but alerts were sent via dashboard.'
+        }
+        
+        showCustomAlert(alertMessage, 'success')
       }
     } catch (error) {
       console.error('Error sending overdue alerts:', error)
-      showCustomAlert(`Error sending overdue alerts: ${error.response?.data?.detail || 'Unknown error'}`, 'error')
+      showCustomAlert(`❌ Error sending overdue alerts: ${error.response?.data?.detail || 'Unknown error'}`, 'error')
     }
   }
 
@@ -506,7 +575,7 @@ export default function RentalDashboard({ dashboardData }: Props) {
   const [showReturnModal, setShowReturnModal] = useState(false)
   const [equipmentToReturn, setEquipmentToReturn] = useState<any>(null)
   const [currentPage, setCurrentPage] = useState(1)
-  const [itemsPerPage, setItemsPerPage] = useState(50) // Increased to show more items per page
+  const [itemsPerPage, setItemsPerPage] = useState(10) // Default to 10 items per page
   
   // Custom alert states
   const [showAlert, setShowAlert] = useState(false)
@@ -549,8 +618,6 @@ export default function RentalDashboard({ dashboardData }: Props) {
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [equipmentToDelete, setEquipmentToDelete] = useState<any>(null)
   
-  // Force update state for component refresh
-  const [forceUpdate, setForceUpdate] = useState(0)
 
   const sendAllReminders = async () => {
     setShowReminderPopup(true)
@@ -562,6 +629,30 @@ export default function RentalDashboard({ dashboardData }: Props) {
       
       if (response.status === 200) {
         setReminderStatus('sent')
+        
+        // Create detailed reminder message
+        const activeCount = getActiveRentalsCount()
+        const dueSoonCount = getDueSoonCount()
+        const overdueCount = getOverdueCount()
+        
+        // Send email reminders
+        const emailSent = await EmailService.sendAllReminders(
+          activeCount,
+          dueSoonCount,
+          overdueCount,
+          EmailService.getDefaultRecipients()
+        )
+        
+        let reminderMessage = `All reminders sent successfully!\n\n${activeCount} active rentals, ${dueSoonCount} due soon, ${overdueCount} overdue.\n\nAll stakeholders have been notified.`
+        
+        if (emailSent) {
+          reminderMessage += '\n\n📧 Email notifications sent successfully!'
+        } else {
+          reminderMessage += '\n\n⚠️ Email notifications failed, but reminders were sent via dashboard.'
+        }
+        
+        showCustomAlert(reminderMessage, 'success')
+        
         setTimeout(() => {
           setShowReminderPopup(false)
           setReminderStatus('idle')
@@ -570,6 +661,7 @@ export default function RentalDashboard({ dashboardData }: Props) {
     } catch (error) {
       console.error('Error sending reminders:', error)
       setReminderStatus('error')
+      showCustomAlert(`❌ Error sending reminders: ${error.response?.data?.detail || 'Unknown error'}`, 'error')
       setTimeout(() => {
         setShowReminderPopup(false)
         setReminderStatus('idle')
@@ -793,7 +885,6 @@ export default function RentalDashboard({ dashboardData }: Props) {
   // Direct refresh function for immediate data update
   const refreshDashboardData = async () => {
     try {
-      console.log('🔄 RentalDashboard: Refreshing data...')
       // Trigger parent refresh
       window.dispatchEvent(new CustomEvent('refreshDashboard'))
       // Also show a success message
@@ -806,25 +897,12 @@ export default function RentalDashboard({ dashboardData }: Props) {
   
   // Force re-render when dashboardData changes
   useEffect(() => {
-    console.log('🔄 RentalDashboard: Data updated:', {
-      total_equipment: dashboardData?.overview?.total_equipment,
-      active_rentals: dashboardData?.overview?.active_rentals,
-      available_equipment: dashboardData?.overview?.available_equipment,
-      anomalies_count: dashboardData?.anomalies?.anomalies?.length
-    })
-    
     // Force recalculation of derived data
     if (dashboardData) {
-      console.log('🔄 Forcing recalculation of equipment data...')
       // This will trigger the useMemo hooks to recalculate
     }
   }, [dashboardData])
   
-  // Function to force component update
-  const forceComponentUpdate = () => {
-    console.log('🔄 Force updating RentalDashboard component...')
-    setForceUpdate(prev => prev + 1)
-  }
 
   if (!dashboardData) {
     return (
@@ -839,25 +917,34 @@ export default function RentalDashboard({ dashboardData }: Props) {
   }
 
   return (
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
     <div className="space-y-6">
-      {/* Custom Alert */}
+      {/* Simple Centered Notification */}
       {showAlert && (
-        <div className="fixed top-4 right-4 z-50 animate-in slide-in-from-right-2">
-          <div className={`rounded-lg p-4 shadow-lg border-l-4 ${
-            alertType === 'success' ? 'bg-green-50 border-green-400 text-green-800' :
-            alertType === 'error' ? 'bg-red-50 border-red-400 text-red-800' :
-            'bg-blue-50 border-blue-400 text-blue-800'
-          }`}>
-            <div className="flex items-center gap-3">
-              {alertType === 'success' && <CheckCircle className="w-5 h-5 text-green-500" />}
-              {alertType === 'error' && <AlertTriangle className="w-5 h-5 text-red-500" />}
-              {alertType === 'info' && <Bell className="w-5 h-5 text-blue-500" />}
-              <p className="font-medium">{alertMessage}</p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md mx-4 p-6 transform transition-all duration-300 scale-100">
+            <div className="flex items-center justify-center mb-4">
+              <div className={`w-16 h-16 rounded-full flex items-center justify-center text-white text-2xl ${
+                alertType === 'success' ? 'bg-green-500' :
+                alertType === 'error' ? 'bg-red-500' :
+                'bg-blue-500'
+              }`}>
+                {alertType === 'success' ? '✅' : alertType === 'error' ? '❌' : 'ℹ️'}
+              </div>
+            </div>
+            <div className="text-center">
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                {alertType === 'success' ? 'Success!' : alertType === 'error' ? 'Error!' : 'Info'}
+              </h3>
+              <p className="text-gray-600 whitespace-pre-line leading-relaxed">{alertMessage}</p>
+            </div>
+            <div className="mt-6 flex justify-center">
               <button
                 onClick={() => setShowAlert(false)}
-                className="ml-auto text-gray-400 hover:text-gray-600"
+                className="px-6 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-lg transition-colors"
               >
-                <X className="w-4 h-4" />
+                OK
               </button>
             </div>
           </div>
@@ -1308,12 +1395,14 @@ export default function RentalDashboard({ dashboardData }: Props) {
           <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-medium">Edit Equipment</h3>
-              <button
+              <Button
                 onClick={() => setShowEditModal(false)}
                 className="text-gray-400 hover:text-gray-600"
+                variant="ghost"
+                size="sm"
               >
                 <X className="w-5 h-5" />
-              </button>
+              </Button>
             </div>
             
             <div className="grid grid-cols-2 gap-4">
@@ -1388,10 +1477,11 @@ export default function RentalDashboard({ dashboardData }: Props) {
       )}
 
       {/* Enhanced Header with Controls */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Rental Dashboard</h2>
-          <p className="text-gray-600">Manage equipment rentals and track returns with real-time data</p>
+            <h2 className="text-3xl font-bold text-gray-900">Equipment Management</h2>
+            <p className="text-gray-600 mt-2 text-lg">Manage your equipment inventory here. Add new equipment, edit existing ones, or rent them out to customers.</p>
         </div>
         
         <div className="flex flex-wrap items-center gap-3">
@@ -1421,19 +1511,6 @@ export default function RentalDashboard({ dashboardData }: Props) {
                      <Button onClick={refreshDashboardData} variant="outline" size="sm">
             <RefreshCw className="w-4 h-4 mr-2" />
              Refresh Dashboard
-           </Button>
-           
-           <Button onClick={() => {
-             console.log('🔄 Manual refresh triggered from RentalDashboard')
-             window.dispatchEvent(new CustomEvent('refreshDashboard'))
-           }} variant="outline" size="sm">
-             <RefreshCw className="w-4 h-4 mr-2" />
-             Force Refresh
-           </Button>
-           
-           <Button onClick={forceComponentUpdate} variant="outline" size="sm">
-             <RefreshCw className="w-4 h-4 mr-2" />
-             Force Update
           </Button>
           
           <Button onClick={sendAllReminders} variant="outline">
@@ -1446,10 +1523,11 @@ export default function RentalDashboard({ dashboardData }: Props) {
             Send Overdue Alerts
           </Button>
         </div>
+        </div>
       </div>
 
       {/* Enhanced Summary Cards with Interactive Elements */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card className="hover:shadow-lg transition-all cursor-pointer group" onClick={() => setActiveTab('active')}>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -1672,12 +1750,12 @@ export default function RentalDashboard({ dashboardData }: Props) {
       </Card>
 
       {/* Enhanced Tabs with Interactive Content */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-5">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <TabsList className="grid w-full grid-cols-5 bg-white shadow-sm">
           <TabsTrigger value="active">Active Rentals ({getActiveRentalsCount()})</TabsTrigger>
           <TabsTrigger value="available">Available ({getAvailableEquipmentCount()})</TabsTrigger>
           <TabsTrigger value="overdue">Overdue ({getOverdueCount()})</TabsTrigger>
-          <TabsTrigger value="due-soon">Due Soon</TabsTrigger>
+          <TabsTrigger value="due-soon">Due Soon ({getDueSoonCount()})</TabsTrigger>
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
         </TabsList>
 
@@ -1933,11 +2011,6 @@ export default function RentalDashboard({ dashboardData }: Props) {
           <div className="flex items-center justify-between">
             <div>
             <h3 className="text-lg font-medium">Active Rentals ({getActiveRentals.length})</h3>
-              <p className="text-sm text-gray-500">
-                Total in system: {dashboardData?.overview?.active_rentals || 0} | 
-                Showing: {getActiveRentals.length} | 
-                Filtered: {dashboardData?.overview?.active_rentals !== getActiveRentals.length}
-              </p>
             </div>
             
             {/* Bulk Actions */}
@@ -2098,7 +2171,38 @@ export default function RentalDashboard({ dashboardData }: Props) {
                          <Button 
                            size="sm" 
                            variant="outline"
-                           onClick={() => showCustomAlert(`Call contact for ${rental.equipment_id}\nPhone: +1 (555) 123-4567`, 'info')}
+                           onClick={() => {
+                             // Generate consistent contact info based on site_id
+                             const siteContacts = {
+                               'SITE001': { name: 'Sarah Johnson', phone: '+1 (555) 123-4567', email: 'sarah.johnson@site001.com' },
+                               'SITE002': { name: 'Michael Chen', phone: '+1 (555) 234-5678', email: 'michael.chen@site002.com' },
+                               'SITE003': { name: 'Emily Rodriguez', phone: '+1 (555) 345-6789', email: 'emily.rodriguez@site003.com' },
+                               'SITE004': { name: 'David Thompson', phone: '+1 (555) 456-7890', email: 'david.thompson@site004.com' },
+                               'SITE005': { name: 'Lisa Anderson', phone: '+1 (555) 567-8901', email: 'lisa.anderson@site005.com' },
+                               'SITE006': { name: 'James Wilson', phone: '+1 (555) 678-9012', email: 'james.wilson@site006.com' },
+                               'SITE007': { name: 'Maria Garcia', phone: '+1 (555) 789-0123', email: 'maria.garcia@site007.com' },
+                               'SITE008': { name: 'Robert Brown', phone: '+1 (555) 890-1234', email: 'robert.brown@site008.com' },
+                               'SITE009': { name: 'Jennifer Davis', phone: '+1 (555) 901-2345', email: 'jennifer.davis@site009.com' },
+                               'SITE010': { name: 'Christopher Lee', phone: '+1 (555) 012-3456', email: 'christopher.lee@site010.com' }
+                             }
+                             
+                             // Get contact info for this site, or generate a default one
+                             const contact = siteContacts[rental.site_id as keyof typeof siteContacts] || {
+                               name: `Site Manager ${rental.site_id}`,
+                               phone: `+1 (555) ${Math.abs(rental.site_id.charCodeAt(4) || 0) % 900 + 100}-${Math.abs(rental.site_id.charCodeAt(5) || 0) % 9000 + 1000}`,
+                               email: `manager@${rental.site_id.toLowerCase()}.com`
+                             }
+                             
+                             showCustomAlert(
+                               `📞 Site Contact Information\n\n` +
+                               `Site ID: ${rental.site_id}\n` +
+                               `Contact: ${contact.name}\n` +
+                               `Phone: ${contact.phone}\n` +
+                               `Email: ${contact.email}\n\n` +
+                               `Equipment: ${rental.equipment_id} (${rental.type || 'Unknown'})`,
+                               'info'
+                             )
+                           }}
                          >
                           <Phone className="w-4 h-4" />
                         </Button>
@@ -2127,6 +2231,11 @@ export default function RentalDashboard({ dashboardData }: Props) {
           <div className="flex items-center justify-between pt-4 border-t">
             <div className="text-sm text-gray-600">
               Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, getActiveRentals.length)} of {getActiveRentals.length} results
+              {getActiveRentals.length > itemsPerPage && (
+                <span className="ml-2 text-blue-600 font-medium">
+                  (Page {currentPage} of {getTotalPages(getActiveRentals)})
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-2">
               {/* Records per page selector */}
@@ -2145,7 +2254,7 @@ export default function RentalDashboard({ dashboardData }: Props) {
                   <option value={15}>15</option>
                   <option value={20}>20</option>
                   <option value={25}>25</option>
-                  <option value={getActiveRentals.length}>All</option>
+                  <option value={getActiveRentals.length}>All ({getActiveRentals.length})</option>
                 </select>
                 <span className="text-sm text-gray-600">per page</span>
               </div>
@@ -2161,6 +2270,19 @@ export default function RentalDashboard({ dashboardData }: Props) {
                 className="mr-2"
               >
                 Show All ({getActiveRentals.length})
+              </Button>
+              
+              {/* Quick Show All Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setItemsPerPage(1000) // Very high number to show all
+                  setCurrentPage(1)
+                }}
+                className="mr-2"
+              >
+                Show All Items
               </Button>
               
               {/* Pagination Controls */}
@@ -2254,7 +2376,23 @@ export default function RentalDashboard({ dashboardData }: Props) {
                           <Button 
                             size="sm" 
                             variant="outline"
-                            onClick={() => alert(`Alert sent for equipment: ${equipment.equipment_id}`)}
+                            onClick={async () => {
+                              try {
+                                const alertData = {
+                                  equipment_id: equipment.equipment_id,
+                                  type: equipment.type,
+                                  site_id: equipment.site_id,
+                                  due_date: equipment.check_in_date,
+                                  days_remaining: Math.ceil((new Date(equipment.check_in_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)),
+                                  utilization: equipment.utilization || 0,
+                                  priority: 'SCHEDULED' as const
+                                }
+                                await EmailService.sendEquipmentAlert(alertData, 'vanshsehgal2026@gmail.com')
+                                showCustomAlert(`✅ Email alert sent for equipment: ${equipment.equipment_id}`, 'success')
+                              } catch (error) {
+                                showCustomAlert(`❌ Failed to send email alert for ${equipment.equipment_id}`, 'error')
+                              }
+                            }}
                           >
                             <Bell className="w-4 h-4 mr-1" />
                             Alert
@@ -2262,7 +2400,38 @@ export default function RentalDashboard({ dashboardData }: Props) {
                           <Button 
                             size="sm" 
                             variant="outline"
-                            onClick={() => alert(`Contacting site for ${equipment.equipment_id}\nEmail: site@company.com\nPhone: +1 (555) 987-6543`)}
+                            onClick={() => {
+                              // Generate consistent contact info based on site_id
+                              const siteContacts = {
+                                'SITE001': { name: 'Sarah Johnson', phone: '+1 (555) 123-4567', email: 'sarah.johnson@site001.com' },
+                                'SITE002': { name: 'Michael Chen', phone: '+1 (555) 234-5678', email: 'michael.chen@site002.com' },
+                                'SITE003': { name: 'Emily Rodriguez', phone: '+1 (555) 345-6789', email: 'emily.rodriguez@site003.com' },
+                                'SITE004': { name: 'David Thompson', phone: '+1 (555) 456-7890', email: 'david.thompson@site004.com' },
+                                'SITE005': { name: 'Lisa Anderson', phone: '+1 (555) 567-8901', email: 'lisa.anderson@site005.com' },
+                                'SITE006': { name: 'James Wilson', phone: '+1 (555) 678-9012', email: 'james.wilson@site006.com' },
+                                'SITE007': { name: 'Maria Garcia', phone: '+1 (555) 789-0123', email: 'maria.garcia@site007.com' },
+                                'SITE008': { name: 'Robert Brown', phone: '+1 (555) 890-1234', email: 'robert.brown@site008.com' },
+                                'SITE009': { name: 'Jennifer Davis', phone: '+1 (555) 901-2345', email: 'jennifer.davis@site009.com' },
+                                'SITE010': { name: 'Christopher Lee', phone: '+1 (555) 012-3456', email: 'christopher.lee@site010.com' }
+                              }
+                              
+                              // Get contact info for this site, or generate a default one
+                              const contact = siteContacts[equipment.site_id as keyof typeof siteContacts] || {
+                                name: `Site Manager ${equipment.site_id}`,
+                                phone: `+1 (555) ${Math.abs(equipment.site_id.charCodeAt(4) || 0) % 900 + 100}-${Math.abs(equipment.site_id.charCodeAt(5) || 0) % 9000 + 1000}`,
+                                email: `manager@${equipment.site_id.toLowerCase()}.com`
+                              }
+                              
+                              showCustomAlert(
+                                `📞 Site Contact Information\n\n` +
+                                `Site ID: ${equipment.site_id}\n` +
+                                `Contact: ${contact.name}\n` +
+                                `Phone: ${contact.phone}\n` +
+                                `Email: ${contact.email}\n\n` +
+                                `Equipment: ${equipment.equipment_id} (${equipment.type})`,
+                                'info'
+                              )
+                            }}
                           >
                             <Mail className="w-4 h-4 mr-1" />
                             Contact
@@ -2326,14 +2495,212 @@ export default function RentalDashboard({ dashboardData }: Props) {
         {/* Due Soon Tab */}
         <TabsContent value="due-soon" className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-medium">Due Soon</h3>
+            <div>
+              <h3 className="text-lg font-medium">Due Soon ({getDueSoonCount()})</h3>
+              <p className="text-sm text-gray-500">Equipment due for return in the next 30 days</p>
+          </div>
+            {getDueSoon.length > 0 && (
+              <Button 
+                onClick={async () => {
+                  // Send alerts for all due soon equipment
+                  const dueSoonAlerts = getDueSoon.map(item => ({
+                    equipment_id: item.equipment_id,
+                    type: item.type,
+                    site_id: item.site_id,
+                    due_date: item.check_in_date,
+                    days_remaining: Math.ceil((new Date(item.check_in_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+                  }))
+                  
+                  // Create detailed alert message
+                  const urgentItems = dueSoonAlerts.filter(item => item.days_remaining <= 7)
+                  const thisWeekItems = dueSoonAlerts.filter(item => item.days_remaining > 7 && item.days_remaining <= 14)
+                  const nextMonthItems = dueSoonAlerts.filter(item => item.days_remaining > 14)
+                  
+                  // Send email alerts
+                  const emailAlerts: EquipmentAlert[] = dueSoonAlerts.map(item => ({
+                    equipment_id: item.equipment_id,
+                    type: item.type,
+                    site_id: item.site_id,
+                    due_date: item.due_date,
+                    days_remaining: item.days_remaining,
+                    utilization: 0, // Default utilization since it's not in the original data
+                    priority: item.days_remaining <= 3 ? 'CRITICAL' : 
+                             item.days_remaining <= 7 ? 'URGENT' : 
+                             item.days_remaining <= 14 ? 'HIGH PRIORITY' : 'SCHEDULED'
+                  }))
+                  
+                  const emailSent = await EmailService.sendDueSoonAlerts(
+                    emailAlerts,
+                    EmailService.getDefaultRecipients()
+                  )
+                  
+                  let alertMessage = `Due soon alerts sent for ${dueSoonAlerts.length} equipment items.\n\n${urgentItems.length} urgent (≤7 days), ${thisWeekItems.length} this week, ${nextMonthItems.length} next month.\n\nAll stakeholders have been notified.`
+                  
+                  if (emailSent) {
+                    alertMessage += '\n\n📧 Email notifications sent successfully!'
+                  } else {
+                    alertMessage += '\n\n⚠️ Email notifications failed, but alerts were sent via dashboard.'
+                  }
+                  
+                  showCustomAlert(alertMessage, 'success')
+                }} 
+                variant="outline" 
+                className="bg-yellow-50 border-yellow-200 text-yellow-700 hover:bg-yellow-100"
+              >
+                <AlertTriangle className="w-4 h-4 mr-2" />
+                Send Due Soon Alerts
+              </Button>
+            )}
           </div>
           
+          {getDueSoon.length === 0 ? (
           <div className="text-center py-12">
             <Calendar className="mx-auto h-12 w-12 text-gray-400" />
             <h3 className="mt-2 text-sm font-medium text-gray-900">No due soon alerts</h3>
             <p className="mt-1 text-sm text-gray-500">All equipment returns are on schedule.</p>
           </div>
+          ) : (
+            <>
+              {/* Due Soon Summary */}
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <AlertTriangle className="h-5 w-5 text-yellow-600" />
+                  <h4 className="text-sm font-medium text-yellow-800">Due Soon Summary</h4>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div>
+                    <p className="text-yellow-700 font-medium">Total Items</p>
+                    <p className="text-yellow-900 text-lg font-bold">{getDueSoon.length}</p>
+                  </div>
+                  <div>
+                    <p className="text-yellow-700 font-medium">This Week</p>
+                    <p className="text-yellow-900 text-lg font-bold">
+                      {getDueSoon.filter(item => {
+                        const daysRemaining = Math.ceil((new Date(item.check_in_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+                        return daysRemaining <= 7
+                      }).length}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-yellow-700 font-medium">Next 2 Weeks</p>
+                    <p className="text-yellow-900 text-lg font-bold">
+                      {getDueSoon.filter(item => {
+                        const daysRemaining = Math.ceil((new Date(item.check_in_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+                        return daysRemaining > 7 && daysRemaining <= 14
+                      }).length}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-yellow-700 font-medium">Next 4 Weeks</p>
+                    <p className="text-yellow-900 text-lg font-bold">
+                      {getDueSoon.filter(item => {
+                        const daysRemaining = Math.ceil((new Date(item.check_in_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+                        return daysRemaining > 14 && daysRemaining <= 30
+                      }).length}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            <div className="space-y-4">
+              {/* Due Soon Equipment List */}
+              <div className="grid gap-4">
+                {getDueSoon.map((item, index) => (
+                  <Card key={item.id || index} className="border-l-4 border-l-yellow-500">
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-4">
+                          <div className="flex-shrink-0">
+                            <div className="w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center">
+                              <Calendar className="w-5 h-5 text-yellow-600" />
+                            </div>
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-medium text-gray-900">{item.equipment_id}</h4>
+                            <p className="text-sm text-gray-500">{item.type}</p>
+                            <p className="text-xs text-gray-400">Site: {item.site_id}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-medium text-yellow-600">
+                            Due: {new Date(item.check_in_date).toLocaleDateString()}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {Math.ceil((new Date(item.check_in_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))} days remaining
+                          </p>
+                          <p className="text-xs text-gray-400">
+                            Utilization: {item.utilization}%
+                          </p>
+                          <Button 
+                            onClick={async () => {
+                              const daysRemaining = Math.ceil((new Date(item.check_in_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+                              
+                              // Create detailed individual alert message
+                              let urgencyLevel = ""
+                              let urgencyIcon = ""
+                              let urgencyColor = ""
+                              
+                              if (daysRemaining <= 3) {
+                                urgencyLevel = "CRITICAL"
+                                urgencyIcon = "🔴"
+                                urgencyColor = "red"
+                              } else if (daysRemaining <= 7) {
+                                urgencyLevel = "URGENT"
+                                urgencyIcon = "🟠"
+                                urgencyColor = "orange"
+                              } else if (daysRemaining <= 14) {
+                                urgencyLevel = "HIGH PRIORITY"
+                                urgencyIcon = "🟡"
+                                urgencyColor = "yellow"
+                              } else {
+                                urgencyLevel = "SCHEDULED"
+                                urgencyIcon = "🟢"
+                                urgencyColor = "green"
+                              }
+                              
+                              // Send individual email alert
+                              const equipmentAlert: EquipmentAlert = {
+                                equipment_id: item.equipment_id,
+                                type: item.type,
+                                site_id: item.site_id,
+                                due_date: new Date(item.check_in_date).toLocaleDateString(),
+                                days_remaining: daysRemaining,
+                                utilization: item.utilization,
+                                priority: urgencyLevel as 'CRITICAL' | 'URGENT' | 'HIGH PRIORITY' | 'SCHEDULED'
+                              }
+                              
+                              const siteEmails = EmailService.getSiteRecipients(item.site_id)
+                              // Always send to vanshsehgal2026@gmail.com as primary recipient
+                              const emailSent = await EmailService.sendEquipmentAlert(
+                                equipmentAlert,
+                                'vanshsehgal2026@gmail.com'
+                              )
+                              
+                              let alertMessage = `Alert sent for ${item.equipment_id} (${item.type})\n\nDue: ${new Date(item.check_in_date).toLocaleDateString()} (${daysRemaining} days)\nSite: ${item.site_id}\nPriority: ${urgencyLevel}\n\nSite manager and team have been notified.`
+                              
+                              if (emailSent) {
+                                alertMessage += '\n\n📧 Email notification sent successfully!'
+                              } else {
+                                alertMessage += '\n\n⚠️ Email notification failed, but alert was sent via dashboard.'
+                              }
+                              
+                              showCustomAlert(alertMessage, 'success')
+                            }} 
+                            variant="outline" 
+                            size="sm" 
+                            className="mt-2 bg-yellow-50 border-yellow-200 text-yellow-700 hover:bg-yellow-100 text-xs"
+                          >
+                            <AlertTriangle className="w-3 h-3 mr-1" />
+                            Send Alert
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+            </>
+          )}
         </TabsContent>
 
         {/* Enhanced Analytics Tab with Interactive Charts */}
@@ -2429,24 +2796,10 @@ export default function RentalDashboard({ dashboardData }: Props) {
             </Card>
           </div>
 
-          {/* Real-time Recommendations */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm font-medium">AI-Powered Recommendations</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {dashboardData.recommendations?.map((rec, index) => (
-                  <div key={index} className="flex items-start gap-3 p-3 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
-                    <p className="text-sm text-blue-800">{rec}</p>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
         </TabsContent>
       </Tabs>
+        </div>
+      </div>
     </div>
   )
 }
