@@ -21,8 +21,9 @@ services:
     autoDeploy: true
 
   # Frontend Service
-  - type: static
+  - type: web
     name: smart-rental-tracker-frontend
+    env: static
     branch: main
     buildCommand: |
       cd frontend
