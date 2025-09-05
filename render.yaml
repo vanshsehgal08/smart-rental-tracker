@@ -3,7 +3,7 @@ services:
   - type: web
     name: smart-rental-tracker-backend
     env: python
-    plan: starter
+    plan: free
     branch: main
     buildCommand: |
       cd backend
@@ -25,7 +25,7 @@ services:
   - type: web
     name: smart-rental-tracker-frontend
     env: static
-    plan: starter
+    plan: free
     branch: main
     buildCommand: |
       cd frontend
