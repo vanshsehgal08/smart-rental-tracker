@@ -1,10 +1,10 @@
 # Smart Rental Tracker
 
-A comprehensive construction and mining equipment rental tracking system built for the **Caterpillar Hackathon**. This project provides intelligent analytics, demand forecasting, and anomaly detection capabilities to optimize equipment utilization and rental operations.
+A comprehensive construction and mining equipment rental tracking system built for the **Hackathon**. This project provides intelligent analytics, demand forecasting, and anomaly detection capabilities to optimize equipment utilization and rental operations.
 
 ## 🏆 About This Project
 
-This project was developed as part of the **Caterpillar Hackathon**, focusing on solving real-world challenges in construction and mining equipment management. Our solution addresses the critical need for intelligent tracking and optimization of heavy machinery rentals.
+This project was developed as part of the **Hackathon**, focusing on solving real-world challenges in construction and mining equipment management. Our solution addresses the critical need for intelligent tracking and optimization of heavy machinery rentals.
 
 ## 🚀 What We Built
 
