@@ -353,14 +353,7 @@ export default function Dashboard() {
         <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8">
           {/* Mobile Navigation - Minimized */}
           <div className="lg:hidden">
-            <div className="flex items-center justify-between py-3">
-              <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center shadow-md">
-                  <span className="text-white font-bold text-sm">SRT</span>
-                </div>
-                <span className="font-bold text-gray-900 text-sm">Smart Rental Tracker</span>
-              </div>
-              
+            <div className="flex items-center justify-end py-3">
               {/* Mobile Menu Button */}
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
